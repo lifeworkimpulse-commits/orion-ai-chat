@@ -1,0 +1,94 @@
+name: Apply chat state fixes
+
+on:
+  push:
+    branches: [feature/mvp-hardening]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mvp-hardening
+          fetch-depth: 0
+      - name: Patch chat flow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('includes/class-orion-chat-orchestrator.php')
+          s = p.read_text()
+          old = '''        if ($project['questions']) {
+                      $answer = "I can prepare a practical ceiling materials list. To make the estimate reliable, please tell me:\\n\\n";
+                      foreach ($project['questions'] as $question) $answer .= '- ' . $question . "\\n";
+                      return $this->finish('''
+          new = '''        if ($project['questions']) {
+                      $answer = 'I can prepare a practical ceiling materials list. Please provide the details below.';
+                      return $this->finish('''
+          if old not in s:
+              raise SystemExit('clarification block not found')
+          s = s.replace(old, new, 1)
+          s = s.replace("/(?:^|\\s)(\\d+(?:[\\.,]\\d+)?)\\s*(?:m²|м²|m2|м2|square\\s*met(?:er|re)s?)(?:\\s|$)/iu", "/(?:^|\\s)(\\d+(?:[\\.,]\\d+)?)\\s*(?:m²|м²|m2|м2|square\\s*met(?:er|re)s?)(?=\\s|[,.;:!?]|$)/iu", 1)
+          old_finish = "$finish = preg_match('/\\b(paint|painted)\\b|краск/iu', $combined) ? 'paint' : (preg_match('/\\b(panel|panels)\\b|панел/iu', $combined) ? 'panels' : '');"
+          new_finish = "$finish = preg_match('/\\b(paint|painted|painting)\\b|краск/iu', $combined) ? 'paint' : (preg_match('/\\b(panel|panels|panelled|paneled|finished|finish)\\b|панел|отдел/iu', $combined) ? 'panels' : '');"
+          if old_finish not in s:
+              raise SystemExit('finish parser not found')
+          p.write_text(s.replace(old_finish, new_finish, 1))
+
+          p = Path('assets/widget.js')
+          s = p.read_text()
+          s = s.replace("  let busy = false;\n\n  resetView();", "  let busy = false;\n  const storageKey = 'orion-ai-chat-view-v1';\n  let saveTimer = 0;\n\n  if (!restoreView()) resetView();\n  const observer = new MutationObserver(scheduleSave);\n  observer.observe(messages, { childList: true, subtree: true, characterData: true });\n  observer.observe(counter, { childList: true, subtree: true, characterData: true });", 1)
+          s = s.replace("  clear.addEventListener('click', () => { if (!busy) resetView(); });", "  clear.addEventListener('click', () => { if (!busy) { sessionStorage.removeItem(storageKey); resetView(); } });", 1)
+          s = s.replace("        add.type = 'button';\n        add.textContent = 'Add to basket';", "        add.type = 'button';\n        add.dataset.productId = String(product.id);\n        add.textContent = 'Add to basket';", 1)
+          marker = "  function setBusy(value) {"
+          helpers = '''  function scheduleSave() {
+              clearTimeout(saveTimer);
+              saveTimer = setTimeout(() => {
+                try {
+                  sessionStorage.setItem(storageKey, JSON.stringify({
+                    html: messages.innerHTML,
+                    counter: counter.textContent,
+                    savedAt: Date.now(),
+                  }));
+                } catch (_) {}
+              }, 50);
+            }
+
+            function restoreView() {
+              try {
+                const state = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+                if (!state || !state.html || Date.now() - Number(state.savedAt || 0) > 30 * 60 * 1000) {
+                  sessionStorage.removeItem(storageKey);
+                  return false;
+                }
+                messages.innerHTML = state.html;
+                counter.textContent = state.counter || `${Number(cfg.questionsPerSession)} questions available`;
+                messages.querySelectorAll('button[data-product-id]').forEach(button => {
+                  button.addEventListener('click', () => addToCart(button, Number(button.dataset.productId)));
+                });
+                scroll();
+                return true;
+              } catch (_) {
+                sessionStorage.removeItem(storageKey);
+                return false;
+              }
+            }
+
+          '''
+          if marker not in s:
+              raise SystemExit('widget insertion marker not found')
+          p.write_text(s.replace(marker, helpers + marker, 1))
+          PY
+      - name: Commit fixes
+        run: |
+          rm .github/workflows/fix-chat-state.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-chat-orchestrator.php assets/widget.js .github/workflows/fix-chat-state.yml
+          git commit -m "fix: prevent ceiling clarification loop and persist chat"
+          git push origin feature/mvp-hardening
