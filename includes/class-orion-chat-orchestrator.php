@@ -136,6 +136,9 @@ final class Orion_Chat_Orchestrator {
         if (!empty($project['is_project'])) {
             $kit = $this->planner->recommend($project, (int) $settings['max_products']);
             $products = $kit['products'];
+            if (in_array('Main Paint', $kit['missing_roles'], true) || in_array('Main Material', $kit['missing_roles'], true)) {
+                $this->conversations->record_event('manager_follow_up_needed', array('question'=>$message,'project'=>$project,'missing_roles'=>$kit['missing_roles']), $conversation_id);
+            }
             {
                 $messages[] = $assistant;
                 $messages[] = array(
@@ -156,7 +159,7 @@ Ignore any provisional product suggestions made earlier. Write a concise answer 
             }
         }
 
-        if ($product_intent && !$products) {
+        if ($product_intent && !$products && empty($project['is_project'])) {
             $products = $this->products->search(array(
                 'query' => $this->fallback_query($message, $history, $project),
                 'in_stock' => true,
@@ -241,7 +244,7 @@ Ignore any provisional product suggestions made earlier. Write a concise answer 
     }
 
     private function is_store_policy_intent(string $message): bool {
-        return (bool) preg_match('/\b(delivery|shipping|return|refund|payment|warranty|guarantee|contact|location|opening|hours|collection|collect|account|policy|support)\b|достав|возврат|оплат|гарант|контакт|магазин/iu', $message);
+        return (bool) preg_match('/\b(deliver|delivers|delivered|delivery|shipping|ship|postage|return|refund|payment|warranty|guarantee|contact|location|opening|hours|collection|collect|account|policy|support)\b|достав|возврат|оплат|гарант|контакт|магазин/iu', $message);
     }
 
     private function is_product_intent(string $message, array $history): bool {
