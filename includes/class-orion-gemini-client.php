@@ -7,11 +7,16 @@ final class Orion_Gemini_Client implements Orion_AI_Provider {
         if(''===$this->api_key)return array('ok'=>false,'error'=>'Google Gemini API key is not configured.');
         $body=$this->body($messages,$tools);$url='https://generativelanguage.googleapis.com/v1beta/models/'.rawurlencode($this->model).':generateContent';
         $response=wp_remote_post($url,array('timeout'=>45,'redirection'=>0,'headers'=>array('Content-Type'=>'application/json','x-goog-api-key'=>$this->api_key),'body'=>wp_json_encode($body)));
-        if(is_wp_error($response))return array('ok'=>false,'error'=>'Google Gemini could not be reached. Please try again.');
+        if(is_wp_error($response))return array('ok'=>false,'error'=>'Google Gemini could not be reached: '.sanitize_text_field($response->get_error_message()));
         $code=(int)wp_remote_retrieve_response_code($response);$json=json_decode(wp_remote_retrieve_body($response),true);
-        if($code<200||$code>=300){$public=match($code){400=>'Google Gemini rejected the request or model.',401,403=>'Google Gemini authentication failed.',429=>'Google Gemini is rate limited. Please try again shortly.',default=>'Google Gemini returned an error. Please try again.'};return array('ok'=>false,'error'=>$public,'status'=>$code);}
+        if($code<200||$code>=300){
+            $raw=is_array($json)?trim(wp_strip_all_tags((string)($json['error']['message']??''))):'';
+            $public=match($code){400=>'Google Gemini rejected the request. Check the selected model.',401=>'Google Gemini API key is invalid.',403=>'Google Gemini access is forbidden. Check the key and whether the Gemini API is enabled.',404=>'Google Gemini model was not found. Enter a model available to this API key.',429=>'Google Gemini is rate limited or its free quota is exhausted.',default=>'Google Gemini returned HTTP '.$code.'.'};
+            if($raw!=='')$public.=' Details: '.sanitize_text_field($raw);
+            return array('ok'=>false,'error'=>$public,'status'=>$code);
+        }
         $parts=$json['candidates'][0]['content']['parts']??array();$text='';$calls=array();
-        foreach($parts as$index=>$part){if(isset($part['text']))$text.=(string)$part['text'];if(isset($part['functionCall']['name']))$calls[]=array('id'=>'gemini_'.wp_generate_uuid4(),'type'=>'function','function'=>array('name'=>sanitize_key($part['functionCall']['name']),'arguments'=>wp_json_encode($part['functionCall']['args']??array())));}
+        foreach($parts as$part){if(isset($part['text']))$text.=(string)$part['text'];if(isset($part['functionCall']['name']))$calls[]=array('id'=>'gemini_'.wp_generate_uuid4(),'type'=>'function','function'=>array('name'=>sanitize_key($part['functionCall']['name']),'arguments'=>wp_json_encode($part['functionCall']['args']??array())));}
         $message=array('role'=>'assistant','content'=>trim($text));if($calls)$message['tool_calls']=$calls;
         if(''===$message['content']&&!$calls)return array('ok'=>false,'error'=>'Google Gemini returned an empty response.');
         $usage=$json['usageMetadata']??array();return array('ok'=>true,'message'=>$message,'usage'=>array('prompt_tokens'=>(int)($usage['promptTokenCount']??0),'completion_tokens'=>(int)($usage['candidatesTokenCount']??0),'total_tokens'=>(int)($usage['totalTokenCount']??0)));
