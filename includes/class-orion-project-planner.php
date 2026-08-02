@@ -37,7 +37,7 @@ final class Orion_Project_Planner {
     }
     private function looks_like_continuation(string $text):bool{return mb_strlen($text)<140||preg_match('/\b(m2|m²|sqm|square|painted|panels?|finished|beige|white|grey|gray|concrete|wood|brick|render)\b/iu',$text);}
     private function area(string $text):?float{
-        if(preg_match('/\b(\d+(?:[\.,]\d+)?)\s*(?:m²|m2|sqm|square\s*met(?:er|re)s?)\b/iu',$text,$m))return(float)str_replace(',','.',$m[1]);
+        if(preg_match('/(?:^|\s)(\d+(?:[\.,]\d+)?)\s*(?:m²|m2|sqm|square\s*met(?:er|re)s?)(?=\s|[,.;:!?]|$)/iu',$text,$m))return(float)str_replace(',','.',$m[1]);
         if(preg_match('/\b(\d+(?:[\.,]\d+)?)\s*m(?:et(?:er|re)s?)?\s*(?:x|×|by)\s*(\d+(?:[\.,]\d+)?)\s*m(?:et(?:er|re)s?)?\b/iu',$text,$m))return round((float)str_replace(',','.',$m[1])*(float)str_replace(',','.',$m[2]),2);
         return null;
     }
@@ -45,8 +45,8 @@ final class Orion_Project_Planner {
     private function colour(string $text):string{foreach(array('beige','white','magnolia','grey','gray','black','blue','green','red','brown','cream')as$value)if(preg_match('/\b'.preg_quote($value,'/').'\b/iu',$text))return$value;return'';}
     private function finish(string $text,string $type):string{if('floor_painting'===$type||'exterior_wall_painting'===$type)return'paint';if(preg_match('/\b(paint|painted|painting)\b/iu',$text))return'paint';if(preg_match('/\b(panel|panels|panelled|paneled|finished)\b/iu',$text))return'panels';return'';}
     private function roles(array $p):array{$colour=$p['colour']?(' '.$p['colour']):'';$surface=$p['surface']?(' '.$p['surface']):'';
-        if('floor_painting'===$p['type'])return array('cleaner'=>'floor cleaner degreaser','repair'=>'floor repair filler'.$surface,'primer'=>'floor primer'.$surface,'main_paint'=>'floor paint'.$surface.$colour,'roller'=>'paint roller frame floor','sleeve'=>'roller sleeve floor paint','brush'=>'paint brush cutting in','tray'=>'paint tray','masking'=>'masking tape protective sheet');
-        if('exterior_wall_painting'===$p['type'])return array('cleaner'=>'exterior masonry wall cleaner','repair'=>'exterior masonry filler'.$surface,'primer'=>'exterior masonry primer stabilising solution'.$surface,'main_paint'=>'exterior masonry paint'.$surface.$colour,'roller'=>'masonry roller frame','sleeve'=>'masonry roller sleeve','brush'=>'masonry paint brush','tray'=>'paint scuttle tray','masking'=>'exterior masking protective sheet');
+        if('floor_painting'===$p['type'])return array('main_paint'=>'floor paint'.$surface.$colour,'primer'=>'floor primer'.$surface,'roller'=>'paint roller frame floor','sleeve'=>'roller sleeve floor paint','brush'=>'paint brush cutting in','tray'=>'paint tray','repair'=>'floor repair filler'.$surface,'cleaner'=>'floor cleaner degreaser','masking'=>'masking tape protective sheet');
+        if('exterior_wall_painting'===$p['type'])return array('main_paint'=>'exterior masonry paint'.$surface.$colour,'primer'=>'exterior masonry primer stabilising solution'.$surface,'roller'=>'masonry roller frame','sleeve'=>'masonry roller sleeve','brush'=>'masonry paint brush','tray'=>'paint scuttle tray','repair'=>'exterior masonry filler'.$surface,'cleaner'=>'exterior masonry wall cleaner','masking'=>'exterior masking protective sheet');
         if('panels'===($p['finish']??''))return array('main_material'=>'ceiling panels','fixings'=>'ceiling panel compatible fixings','trim'=>'ceiling panel trim profile','tools'=>'panel cutting tool','protection'=>'safety glasses gloves');
         return array('repair'=>'ceiling filler','primer'=>'ceiling primer','main_paint'=>'ceiling paint'.$colour,'roller'=>'paint roller frame','sleeve'=>'roller sleeve ceiling','brush'=>'paint brush cutting in','tray'=>'paint tray','masking'=>'masking tape dust sheet');
     }
