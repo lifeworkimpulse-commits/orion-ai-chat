@@ -30,8 +30,13 @@
   const messages = root.querySelector('.orion-ai-messages');
   const counter = root.querySelector('.orion-ai-counter');
   let busy = false;
+  const storageKey = 'orion-ai-chat-view-v1';
+  let saveTimer = 0;
 
-  resetView();
+  if (!restoreView()) resetView();
+  const observer = new MutationObserver(scheduleSave);
+  observer.observe(messages, { childList: true, subtree: true, characterData: true });
+  observer.observe(counter, { childList: true, subtree: true, characterData: true });
   const toggle = open => {
     root.classList.toggle('is-open', open);
     panel.classList.toggle('is-open', open);
@@ -42,7 +47,7 @@
 
   launcher.addEventListener('click', () => toggle(!panel.classList.contains('is-open')));
   close.addEventListener('click', () => toggle(false));
-  clear.addEventListener('click', () => { if (!busy) resetView(); });
+  clear.addEventListener('click', () => { if (!busy) { sessionStorage.removeItem(storageKey); resetView(); } });
   input.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -237,6 +242,7 @@
       if (product.can_add_to_cart) {
         const add = document.createElement('button');
         add.type = 'button';
+        add.dataset.productId = String(product.id);
         add.textContent = 'Add to basket';
         add.addEventListener('click', () => addToCart(add, Number(product.id)));
         actions.appendChild(add);
@@ -262,6 +268,39 @@
     } catch (error) {
       button.textContent = error.message || previous;
       button.disabled = false;
+    }
+  }
+
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify({
+          html: messages.innerHTML,
+          counter: counter.textContent,
+          savedAt: Date.now(),
+        }));
+      } catch (_) {}
+    }, 50);
+  }
+
+  function restoreView() {
+    try {
+      const state = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+      if (!state || !state.html || Date.now() - Number(state.savedAt || 0) > 30 * 60 * 1000) {
+        sessionStorage.removeItem(storageKey);
+        return false;
+      }
+      messages.innerHTML = state.html;
+      counter.textContent = state.counter || `${Number(cfg.questionsPerSession)} questions available`;
+      messages.querySelectorAll('button[data-product-id]').forEach(button => {
+        button.addEventListener('click', () => addToCart(button, Number(button.dataset.productId)));
+      });
+      scroll();
+      return true;
+    } catch (_) {
+      sessionStorage.removeItem(storageKey);
+      return false;
     }
   }
 

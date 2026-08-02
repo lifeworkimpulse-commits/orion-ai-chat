@@ -46,8 +46,7 @@ final class Orion_Chat_Orchestrator {
 
         $project = $this->ceiling_context($message, $history);
         if ($project['questions']) {
-            $answer = "I can prepare a practical ceiling materials list. To make the estimate reliable, please tell me:\n\n";
-            foreach ($project['questions'] as $question) $answer .= '- ' . $question . "\n";
+            $answer = 'I can prepare a practical ceiling materials list. Please provide the details below.';
             return $this->finish(
                 $conversation,
                 $settings,
@@ -187,10 +186,10 @@ final class Orion_Chat_Orchestrator {
         if (!$is_ceiling) return array('is_ceiling' => false, 'questions' => array(), 'estimate' => null);
 
         $area = 0.0;
-        if (preg_match('/(?:^|\s)(\d+(?:[\.,]\d+)?)\s*(?:m²|м²|m2|м2|square\s*met(?:er|re)s?)(?:\s|$)/iu', $combined, $matches)) {
+        if (preg_match('/(?:^|\s)(\d+(?:[\.,]\d+)?)\s*(?:m²|м²|m2|м2|square\s*met(?:er|re)s?)(?=\s|[,.;:!?]|$)/iu', $combined, $matches)) {
             $area = (float) str_replace(',', '.', $matches[1]);
         }
-        $finish = preg_match('/\b(paint|painted)\b|краск/iu', $combined) ? 'paint' : (preg_match('/\b(panel|panels)\b|панел/iu', $combined) ? 'panels' : '');
+        $finish = preg_match('/\b(paint|painted|painting)\b|краск/iu', $combined) ? 'paint' : (preg_match('/\b(panel|panels|panelled|paneled|finished|finish)\b|панел|отдел/iu', $combined) ? 'panels' : '');
         $questions = array();
         if ($area < 1) $questions[] = 'What is the ceiling area in m²?';
         if ($finish === '') $questions[] = 'Will the ceiling be painted or finished with panels?';
