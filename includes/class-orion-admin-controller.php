@@ -17,6 +17,8 @@ final class Orion_Admin_Controller {
         add_action('admin_post_orion_ai_document', array($this, 'handle_document'));
         add_action('admin_post_orion_ai_manual_document', array($this, 'handle_manual_document'));
         add_action('admin_post_orion_ai_reindex_knowledge', array($this, 'handle_reindex'));
+        add_action('admin_post_orion_ai_test_provider', array($this, 'handle_test_provider'));
+        add_action('admin_post_orion_ai_remove_key', array($this, 'handle_remove_key'));
     }
 
     public function admin_menu(): void {
@@ -50,14 +52,17 @@ final class Orion_Admin_Controller {
 
     private function render_settings(): void {
         $settings = Orion_AI_Settings::get();
-        $constant_key = defined('ORION_AI_OPENROUTER_KEY') && trim((string) ORION_AI_OPENROUTER_KEY) !== '';
-        $saved_key = trim((string) ($settings['api_key'] ?? '')) !== '';
-        $key_status = $constant_key ? 'API key active from wp-config.php.' : ($saved_key ? 'API key saved in WordPress. The field stays blank for security.' : 'No API key is configured.');
-        echo '<section class="orion-card"><h2>Assistant settings</h2><p>Production stores should keep the API key in <code>wp-config.php</code> and use a fixed tool-capable model.</p><form method="post" action="options.php">';
+        $openrouter_status = Orion_AI_Settings::key_configured('openrouter', $settings) ? '•••••••••••••••• — configured via ' . Orion_AI_Settings::key_source('openrouter', $settings) : 'Not configured';
+        $google_status = Orion_AI_Settings::key_configured('google', $settings) ? '•••••••••••••••• — configured via ' . Orion_AI_Settings::key_source('google', $settings) : 'Not configured';
+        echo '<section class="orion-card"><h2>Assistant settings</h2><p>Choose one active provider. Keys are never rendered back into the page. For production, define <code>ORION_AI_OPENROUTER_KEY</code> or <code>ORION_AI_GOOGLE_KEY</code> in <code>wp-config.php</code>.</p><form method="post" action="options.php">';
         settings_fields('orion_ai_group');
         echo '<p><label><input type="checkbox" name="orion_ai_settings[enabled]" value="1" ' . checked($settings['enabled'], '1', false) . '> Enable assistant</label></p>';
-        $this->field('OpenRouter API key', 'api_key', 'password', '', $key_status . ' Paste a new key only to replace it.');
-        $this->field('Model slug', 'model', 'text', $settings['model'], 'A fixed model is more predictable than the free router in production.');
+        echo '<p><label><strong>AI provider</strong><br><select name="orion_ai_settings[provider]"><option value="openrouter" ' . selected($settings['provider'], 'openrouter', false) . '>OpenRouter</option><option value="google" ' . selected($settings['provider'], 'google', false) . '>Google Gemini</option></select></label></p>';
+        $this->field('OpenRouter API key', 'openrouter_api_key', 'password', '', $openrouter_status . '. Paste a new key only to replace it.');
+        $this->field('OpenRouter model', 'openrouter_model', 'text', $settings['openrouter_model'], 'Use openrouter/free for testing or a fixed tool-capable model for production.');
+        $this->field('Google Gemini API key', 'google_api_key', 'password', '', $google_status . '. Paste a new key only to replace it.');
+        $this->field('Google Gemini model', 'google_model', 'text', $settings['google_model'], 'Use a model available to your Google AI Studio account with function calling support.');
+        echo '<p class="description">Save settings before testing a provider.</p>';
         $this->field('Chat title', 'title', 'text', $settings['title']);
         $this->field('Greeting', 'greeting', 'textarea', $settings['greeting']);
         $this->field('Daily-limit message', 'limit_message', 'textarea', $settings['limit_message']);
@@ -75,7 +80,16 @@ final class Orion_Admin_Controller {
         }
         $this->field('System instructions', 'system_prompt', 'textarea', $settings['system_prompt']);
         submit_button('Save settings');
-        echo '</form></section>';
+        echo '</form><hr><h3>Connection tools</h3>';
+        foreach (array('openrouter' => 'OpenRouter', 'google' => 'Google Gemini') as $provider => $label) {
+            echo '<div style="display:flex;gap:8px;align-items:center;margin:8px 0"><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+            wp_nonce_field('orion_ai_test_provider');
+            echo '<input type="hidden" name="action" value="orion_ai_test_provider"><input type="hidden" name="provider" value="' . esc_attr($provider) . '"><button class="button">Test ' . esc_html($label) . '</button></form>';
+            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+            wp_nonce_field('orion_ai_remove_key');
+            echo '<input type="hidden" name="action" value="orion_ai_remove_key"><input type="hidden" name="provider" value="' . esc_attr($provider) . '"><button class="button button-link-delete">Remove saved key</button></form></div>';
+        }
+        echo '</section>';
     }
 
     private function render_knowledge(): void {
@@ -115,6 +129,30 @@ final class Orion_Admin_Controller {
             echo '<div class="orion-metric"><span>' . esc_html(str_replace('_', ' ', $event['event_type'])) . '</span><strong>' . (int) $event['total'] . '</strong></div>';
         }
         echo '</div><p class="description">Events are aggregate operational metrics. Customer message text is not shown on this screen.</p></section>';
+    }
+
+    public function handle_test_provider(): void {
+        $this->guard('orion_ai_test_provider');
+        $provider = sanitize_key(wp_unslash($_POST['provider'] ?? 'openrouter'));
+        $settings = Orion_AI_Settings::get();
+        $settings['provider'] = in_array($provider, array('openrouter', 'google'), true) ? $provider : 'openrouter';
+        $result = Orion_AI_Provider_Factory::create($settings)->chat(array(array('role' => 'user', 'content' => 'Reply with exactly: Connection successful')));
+        $message = !empty($result['ok']) ? ucfirst($settings['provider']) . ' connection successful.' : (string)($result['error'] ?? 'Connection failed.');
+        $this->redirect('settings', $message);
+    }
+
+    public function handle_remove_key(): void {
+        $this->guard('orion_ai_remove_key');
+        $provider = sanitize_key(wp_unslash($_POST['provider'] ?? 'openrouter'));
+        $settings = Orion_AI_Settings::get();
+        $key = 'google' === $provider ? 'google_api_key' : 'openrouter_api_key';
+        $constant = 'google' === $provider ? 'ORION_AI_GOOGLE_KEY' : 'ORION_AI_OPENROUTER_KEY';
+        if (defined($constant) && trim((string)constant($constant)) !== '') {
+            $this->redirect('settings', 'This key is defined in wp-config.php and cannot be removed here.');
+        }
+        $settings[$key] = '';
+        update_option(Orion_AI_Settings::OPTION, $settings, false);
+        $this->redirect('settings', ucfirst($provider) . ' saved key removed.');
     }
 
     public function handle_import(): void {

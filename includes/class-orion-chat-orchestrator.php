@@ -82,7 +82,7 @@ final class Orion_Chat_Orchestrator {
         foreach ($history as $item) $messages[] = array('role' => $item['role'], 'content' => $item['content']);
         $messages[] = array('role' => 'user', 'content' => $message);
 
-        $client = new Orion_OpenRouter_Client(Orion_AI_Settings::api_key($settings), (string) $settings['model']);
+        $client = Orion_AI_Provider_Factory::create($settings);
         $definitions = $this->tools->definitions((int) $settings['max_products']);
         $first = $client->chat($messages, $definitions);
         if (!$first['ok']) return new WP_Error('ai_error', $first['error'], array('status' => 502));
