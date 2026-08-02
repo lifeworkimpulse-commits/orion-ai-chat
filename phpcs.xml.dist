@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<ruleset name="Orion AI Assistant">
+  <description>WordPress coding standards for Orion AI Assistant.</description>
+  <file>orion-ai-assistant.php</file><file>includes</file><file>tests</file>
+  <exclude-pattern>vendor/*</exclude-pattern>
+  <rule ref="WordPress"/><rule ref="WordPress-Extra"/><rule ref="WordPress-Docs"/>
+  <arg name="extensions" value="php"/>
+</ruleset>
