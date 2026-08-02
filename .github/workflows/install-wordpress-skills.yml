@@ -1,0 +1,49 @@
+name: Install official WordPress agent skills
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  install-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch official WordPress skills
+        run: |
+          git clone --depth 1 --branch trunk https://github.com/WordPress/agent-skills.git /tmp/wordpress-agent-skills
+          mkdir -p .github/skills
+          for skill in \
+            wordpress-router \
+            wp-project-triage \
+            wp-rest-api \
+            wp-phpstan \
+            wp-performance \
+            wp-playground \
+            wp-plugin-directory-guidelines
+          do
+            rm -rf ".github/skills/$skill"
+            cp -R "/tmp/wordpress-agent-skills/skills/$skill" ".github/skills/$skill"
+          done
+
+      - name: Commit installed skills
+        run: |
+          rm -f .github/workflows/install-wordpress-skills.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/skills .github/workflows/install-wordpress-skills.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: install official WordPress agent skills"
+          git push origin main
