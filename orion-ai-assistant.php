@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Orion AI Shopping Assistant
  * Description: Global WooCommerce AI chat assistant powered by OpenRouter, with live catalogue tools and a managed knowledge base.
- * Version: 0.4.0
+ * Version: 0.4.1
  * Author: Orion Supplies
  * Requires at least: 6.2
  * Requires PHP: 8.0
@@ -11,7 +11,7 @@
  * Text Domain: orion-ai-assistant
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
-define( 'ORION_AI_VERSION', '0.4.0' );
+define( 'ORION_AI_VERSION', '0.4.1' );
 define( 'ORION_AI_SCHEMA_VERSION', '0.4.0' );
 define( 'ORION_AI_FILE', __FILE__ );
 define( 'ORION_AI_DIR', plugin_dir_path( __FILE__ ) );
