@@ -1,0 +1,40 @@
+name: Tune project planner
+on:
+  push:
+    branches: [feature/mvp-hardening]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mvp-hardening
+          fetch-depth: 0
+      - name: Tune planner
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-project-planner.php');s=p.read_text()
+          old="if(preg_match('/\\b(\\d+(?:[\\.,]\\d+)?)\\s*(?:m²|m2|sqm|square\\s*met(?:er|re)s?)\\b/iu',$text,$m))"
+          new="if(preg_match('/(?:^|\\s)(\\d+(?:[\\.,]\\d+)?)\\s*(?:m²|m2|sqm|square\\s*met(?:er|re)s?)(?=\\s|[,.;:!?]|$)/iu',$text,$m))"
+          if old not in s: raise SystemExit('area regex not found')
+          s=s.replace(old,new,1)
+          old_floor="return array('cleaner'=>'floor cleaner degreaser','repair'=>'floor repair filler'.$surface,'primer'=>'floor primer'.$surface,'main_paint'=>'floor paint'.$surface.$colour,'roller'=>'paint roller frame floor','sleeve'=>'roller sleeve floor paint','brush'=>'paint brush cutting in','tray'=>'paint tray','masking'=>'masking tape protective sheet');"
+          new_floor="return array('main_paint'=>'floor paint'.$surface.$colour,'primer'=>'floor primer'.$surface,'roller'=>'paint roller frame floor','sleeve'=>'roller sleeve floor paint','brush'=>'paint brush cutting in','tray'=>'paint tray','repair'=>'floor repair filler'.$surface,'cleaner'=>'floor cleaner degreaser','masking'=>'masking tape protective sheet');"
+          old_ext="return array('cleaner'=>'exterior masonry wall cleaner','repair'=>'exterior masonry filler'.$surface,'primer'=>'exterior masonry primer stabilising solution'.$surface,'main_paint'=>'exterior masonry paint'.$surface.$colour,'roller'=>'masonry roller frame','sleeve'=>'masonry roller sleeve','brush'=>'masonry paint brush','tray'=>'paint scuttle tray','masking'=>'exterior masking protective sheet');"
+          new_ext="return array('main_paint'=>'exterior masonry paint'.$surface.$colour,'primer'=>'exterior masonry primer stabilising solution'.$surface,'roller'=>'masonry roller frame','sleeve'=>'masonry roller sleeve','brush'=>'masonry paint brush','tray'=>'paint scuttle tray','repair'=>'exterior masonry filler'.$surface,'cleaner'=>'exterior masonry wall cleaner','masking'=>'exterior masking protective sheet');"
+          if old_floor not in s or old_ext not in s: raise SystemExit('role order not found')
+          s=s.replace(old_floor,new_floor,1).replace(old_ext,new_ext,1)
+          p.write_text(s)
+          PY
+      - name: Commit tuning
+        run: |
+          rm .github/workflows/tune-project-planner.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-project-planner.php .github/workflows/tune-project-planner.yml
+          git commit -m "fix: recognise natural area units and prioritise complete kits"
+          git push origin feature/mvp-hardening
