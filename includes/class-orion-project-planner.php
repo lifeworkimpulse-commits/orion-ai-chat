@@ -22,9 +22,12 @@ final class Orion_Project_Planner {
     }
 
     public function recommend( array $project, int $max_products ): array {
-        $roles=$this->roles($project);$products=array();$missing=array();$max_products=max(1,min(12,$max_products));
-        foreach($roles as$role=>$query){if(count($products)>=$max_products)break;$found=$this->products->search(array('query'=>$query,'in_stock'=>true,'limit'=>3));$selected=null;foreach($found as$item){if($this->suitable($item,$role,$project)){$selected=$item;break;}}
-            if($selected){$selected['kit_role']=$role;$selected['recommendation_reason']=$this->role_label($role);$products[]=$selected;}else{$missing[]=$this->role_label($role);}
+        $roles=$this->roles($project);$products=array();$missing=array();$used=array();$max_products=max(1,min(12,$max_products));
+        foreach($roles as$role=>$query){
+            if(count($products)>=$max_products)break;
+            $found=$this->products->search(array('query'=>$query,'in_stock'=>true,'limit'=>5));$selected=null;
+            foreach($found as$item){$id=(int)($item['id']??0);if(!$id||isset($used[$id]))continue;if($this->suitable($item,$role,$project)){$selected=$item;break;}}
+            if($selected){$used[(int)$selected['id']]=true;$selected['kit_role']=$role;$selected['recommendation_reason']=$this->role_label($role);$products[]=$selected;}else{$missing[]=$this->role_label($role);}
         }
         return array('products'=>$products,'missing_roles'=>$missing,'roles'=>array_map(array($this,'role_label'),array_keys($roles)));
     }
@@ -50,6 +53,12 @@ final class Orion_Project_Planner {
         if('panels'===($p['finish']??''))return array('main_material'=>'ceiling panels','fixings'=>'ceiling panel compatible fixings','trim'=>'ceiling panel trim profile','tools'=>'panel cutting tool','protection'=>'safety glasses gloves');
         return array('repair'=>'ceiling filler','primer'=>'ceiling primer','main_paint'=>'ceiling paint'.$colour,'roller'=>'paint roller frame','sleeve'=>'roller sleeve ceiling','brush'=>'paint brush cutting in','tray'=>'paint tray','masking'=>'masking tape dust sheet');
     }
-    private function suitable(array $item,string $role,array $p):bool{$hay=mb_strtolower(($item['name']??'').' '.($item['short_description']??'').' '.implode(' ',$item['categories']??array()).' '.wp_json_encode($item['attributes']??array()));if('main_paint'===$role&&'exterior_wall_painting'===$p['type']&&!preg_match('/exterior|external|masonry|facade/iu',$hay))return false;if('main_paint'===$role&&'floor_painting'===$p['type']&&!preg_match('/floor|garage|concrete paint|floor coating/iu',$hay))return false;return true;}
+    private function suitable(array $item,string $role,array $p):bool{
+        $hay=mb_strtolower(($item['name']??'').' '.($item['short_description']??'').' '.implode(' ',$item['categories']??array()).' '.wp_json_encode($item['attributes']??array()));
+        if('main_paint'===$role&&'exterior_wall_painting'===$p['type'])return(bool)preg_match('/exterior|external|masonry|facade/iu',$hay);
+        if('main_paint'===$role&&'floor_painting'===$p['type'])return(bool)preg_match('/floor|garage|concrete paint|floor coating|epoxy/iu',$hay);
+        $patterns=array('primer'=>'/primer|sealer|stabilis/iu','roller'=>'/roller.*frame|frame.*roller|roller set/iu','sleeve'=>'/roller sleeve|roller refill|roller cover/iu','brush'=>'/brush/iu','tray'=>'/tray|scuttle|paint kettle/iu','repair'=>'/filler|repair|patch/iu','cleaner'=>'/cleaner|degreaser|surface preparation/iu','masking'=>'/masking|tape|dust sheet|protective sheet|cover/iu','fixings'=>'/fixing|screw|clip|adhesive/iu','trim'=>'/trim|profile|moulding|edging/iu','tools'=>'/cutter|saw|knife|cutting/iu','protection'=>'/glove|goggle|mask|ppe|protection/iu');
+        return isset($patterns[$role])?(bool)preg_match($patterns[$role],$hay):true;
+    }
     private function role_label(string $role):string{return ucwords(str_replace('_',' ',$role));}
 }
