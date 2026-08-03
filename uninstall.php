@@ -1,13 +1,2 @@
 <?php
-/** Orion AI Assistant uninstall routine. */
-if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) { exit; }
-if ( ! (bool) get_option( 'orion_ai_delete_data_on_uninstall', false ) ) { return; }
-global $wpdb;
-foreach ( array( 'orion_ai_document_chunks', 'orion_ai_documents', 'orion_ai_messages', 'orion_ai_events', 'orion_ai_conversations' ) as $suffix ) {
-    $table = $wpdb->prefix . $suffix;
-    $wpdb->query( "DROP TABLE IF EXISTS `{$table}`" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-}
-delete_option( 'orion_ai_settings' );
-delete_option( 'orion_ai_schema_version' );
-delete_option( 'orion_ai_delete_data_on_uninstall' );
-wp_clear_scheduled_hook( 'orion_ai_daily_cleanup' );
+if(!defined('WP_UNINSTALL_PLUGIN')){exit;}if(!(bool)get_option('orion_ai_delete_data_on_uninstall',false)){return;}global$wpdb;foreach(array('orion_ai_document_chunks','orion_ai_documents','orion_ai_messages','orion_ai_events','orion_ai_handoffs','orion_ai_conversations')as$suffix){$table=$wpdb->prefix.$suffix;$wpdb->query("DROP TABLE IF EXISTS `{$table}`");}delete_option('orion_ai_settings');delete_option('orion_ai_schema_version');delete_option('orion_ai_delete_data_on_uninstall');wp_clear_scheduled_hook('orion_ai_daily_cleanup');

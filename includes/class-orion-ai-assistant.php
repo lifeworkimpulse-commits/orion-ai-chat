@@ -6,6 +6,78 @@ final class Orion_AI_Assistant{
  private function __construct(){self::maybe_upgrade();add_action(Orion_Cleanup::HOOK,array(Orion_Cleanup::class,'run'));Orion_Cleanup::schedule();$knowledge=new Orion_Knowledge_Base();$products=new Orion_Product_Search();$conversations=new Orion_Conversation_Service();$rate=new Orion_Rate_Limiter();$classifier=new Orion_Intent_Classifier();$context=new Orion_Context_Manager();$planner=new Orion_Semantic_Product_Planner($products);$handoff=new Orion_Manager_Handoff();$chat=new Orion_Chat_Orchestrator($conversations,$rate,$knowledge,$planner,$classifier,$context,$handoff);$this->admin=new Orion_Admin_Controller($knowledge,$conversations);$this->rest=new Orion_REST_Controller($chat,$rate,$conversations);$this->admin->register();add_action('wp_enqueue_scripts',array($this,'enqueue_widget'));add_action('rest_api_init',array($this->rest,'register_routes'));}
  public static function activate():void{if(!Orion_Environment::ready())wp_die(esc_html(implode(' ',Orion_Environment::issues())));self::install_schema();if(null===get_option(Orion_AI_Settings::OPTION,null))add_option(Orion_AI_Settings::OPTION,Orion_AI_Settings::defaults());Orion_Cleanup::schedule();}
  public static function deactivate():void{wp_clear_scheduled_hook(Orion_Cleanup::HOOK);}public static function maybe_upgrade():void{if(get_option('orion_ai_schema_version')!==ORION_AI_SCHEMA_VERSION)self::install_schema();}
- private static function install_schema():void{global$wpdb;require_once ABSPATH.'wp-admin/includes/upgrade.php';$c=$wpdb->get_charset_collate();dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_documents (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,source_url TEXT NOT NULL,title TEXT NOT NULL,markdown LONGTEXT NOT NULL,content_hash CHAR(64) NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,PRIMARY KEY(id),KEY content_hash(content_hash)) $c;");dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_document_chunks (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,document_id BIGINT UNSIGNED NOT NULL,position SMALLINT UNSIGNED NOT NULL DEFAULT 0,heading TEXT NOT NULL,content LONGTEXT NOT NULL,content_hash CHAR(64) NOT NULL,created_at DATETIME NOT NULL,PRIMARY KEY(id),KEY document_id(document_id),KEY content_hash(content_hash)) $c;");dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_conversations (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,client_hash CHAR(64) NOT NULL,session_key CHAR(36) NOT NULL,day_key CHAR(10) NOT NULL,question_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,last_activity DATETIME NOT NULL,created_at DATETIME NOT NULL,state_json LONGTEXT NULL,PRIMARY KEY(id),KEY client_day(client_hash,day_key),UNIQUE KEY session_key(session_key)) $c;");dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_messages (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NOT NULL,role VARCHAR(20) NOT NULL,content LONGTEXT NOT NULL,usage_json LONGTEXT NULL,created_at DATETIME NOT NULL,PRIMARY KEY(id),KEY conversation_id(conversation_id)) $c;");dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_events (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NULL,event_type VARCHAR(64) NOT NULL,payload_json LONGTEXT NULL,created_at DATETIME NOT NULL,PRIMARY KEY(id),KEY event_type(event_type),KEY created_at(created_at),KEY conversation_id(conversation_id)) $c;");dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_handoffs (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NOT NULL,question LONGTEXT NOT NULL,context_json LONGTEXT NULL,status VARCHAR(20) NOT NULL DEFAULT 'new',created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,PRIMARY KEY(id),KEY status(status),KEY conversation_id(conversation_id)) $c;");update_option('orion_ai_schema_version',ORION_AI_SCHEMA_VERSION,false);}
+ private static function install_schema():void{
+  global$wpdb;require_once ABSPATH.'wp-admin/includes/upgrade.php';$c=$wpdb->get_charset_collate();
+  dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_documents (
+   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+   source_url TEXT NOT NULL,
+   title TEXT NOT NULL,
+   markdown LONGTEXT NOT NULL,
+   content_hash CHAR(64) NOT NULL,
+   created_at DATETIME NOT NULL,
+   updated_at DATETIME NOT NULL,
+   PRIMARY KEY  (id),
+   KEY content_hash (content_hash)
+  ) $c;");
+  dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_document_chunks (
+   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+   document_id BIGINT UNSIGNED NOT NULL,
+   position SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+   heading TEXT NOT NULL,
+   content LONGTEXT NOT NULL,
+   content_hash CHAR(64) NOT NULL,
+   created_at DATETIME NOT NULL,
+   PRIMARY KEY  (id),
+   KEY document_id (document_id),
+   KEY content_hash (content_hash)
+  ) $c;");
+  dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_conversations (
+   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+   client_hash CHAR(64) NOT NULL,
+   session_key CHAR(36) NOT NULL,
+   day_key CHAR(10) NOT NULL,
+   question_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+   last_activity DATETIME NOT NULL,
+   created_at DATETIME NOT NULL,
+   state_json LONGTEXT NULL,
+   PRIMARY KEY  (id),
+   KEY client_day (client_hash,day_key),
+   UNIQUE KEY session_key (session_key)
+  ) $c;");
+  dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_messages (
+   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+   conversation_id BIGINT UNSIGNED NOT NULL,
+   role VARCHAR(20) NOT NULL,
+   content LONGTEXT NOT NULL,
+   usage_json LONGTEXT NULL,
+   created_at DATETIME NOT NULL,
+   PRIMARY KEY  (id),
+   KEY conversation_id (conversation_id)
+  ) $c;");
+  dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_events (
+   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+   conversation_id BIGINT UNSIGNED NULL,
+   event_type VARCHAR(64) NOT NULL,
+   payload_json LONGTEXT NULL,
+   created_at DATETIME NOT NULL,
+   PRIMARY KEY  (id),
+   KEY event_type (event_type),
+   KEY created_at (created_at),
+   KEY conversation_id (conversation_id)
+  ) $c;");
+  dbDelta("CREATE TABLE {$wpdb->prefix}orion_ai_handoffs (
+   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+   conversation_id BIGINT UNSIGNED NOT NULL,
+   question LONGTEXT NOT NULL,
+   context_json LONGTEXT NULL,
+   status VARCHAR(20) NOT NULL DEFAULT 'new',
+   created_at DATETIME NOT NULL,
+   updated_at DATETIME NOT NULL,
+   PRIMARY KEY  (id),
+   KEY status (status),
+   KEY conversation_id (conversation_id)
+  ) $c;");
+  update_option('orion_ai_schema_version',ORION_AI_SCHEMA_VERSION,false);
+ }
  public function enqueue_widget():void{$s=Orion_AI_Settings::get();if('1'!==$s['enabled']||is_admin())return;wp_enqueue_style('orion-ai-widget',ORION_AI_URL.'assets/widget.css',array(),ORION_AI_VERSION);wp_enqueue_script('orion-ai-widget',ORION_AI_URL.'assets/widget.js',array(),ORION_AI_VERSION,true);wp_localize_script('orion-ai-widget','OrionAI',array('rest'=>esc_url_raw(rest_url('orion-ai/v1/')),'nonce'=>wp_create_nonce('wp_rest'),'title'=>$s['title'],'greeting'=>$s['greeting'],'limitMessage'=>$s['limit_message'],'position'=>$s['position'],'primaryColor'=>$s['primary_color'],'questionsPerSession'=>(int)$s['questions_per_session'],'quickPrompts'=>array('Help me choose products','I need materials for a project','Delivery and returns')));}
 }
