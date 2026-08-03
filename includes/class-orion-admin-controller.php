@@ -19,6 +19,7 @@ final class Orion_Admin_Controller {
         add_action('admin_post_orion_ai_reindex_knowledge', array($this, 'handle_reindex'));
         add_action('admin_post_orion_ai_test_provider', array($this, 'handle_test_provider'));
         add_action('admin_post_orion_ai_remove_key', array($this, 'handle_remove_key'));
+        add_action('admin_post_orion_ai_resolve_handoff', array($this, 'handle_resolve_handoff'));
     }
 
     public function admin_menu(): void {
@@ -32,8 +33,8 @@ final class Orion_Admin_Controller {
     public function render(): void {
         if (!current_user_can('manage_woocommerce')) return;
         $tab = sanitize_key(wp_unslash($_GET['tab'] ?? 'settings'));
-        if (!in_array($tab, array('settings', 'knowledge', 'analytics'), true)) $tab = 'settings';
-        $tabs = array('settings' => 'Assistant settings', 'knowledge' => 'Knowledge base', 'analytics' => 'Analytics');
+        if (!in_array($tab, array('settings', 'knowledge', 'handoffs', 'analytics'), true)) $tab = 'settings';
+        $tabs = array('settings' => 'Assistant settings', 'knowledge' => 'Knowledge base', 'handoffs' => 'Manager queue', 'analytics' => 'Analytics');
 
         echo '<div class="wrap orion-admin"><h1>Orion AI Assistant</h1>';
         if (!empty($_GET['orion_notice'])) {
@@ -45,6 +46,7 @@ final class Orion_Admin_Controller {
         }
         echo '</nav>';
         if ($tab === 'knowledge') $this->render_knowledge();
+        elseif ($tab === 'handoffs') $this->render_handoffs();
         elseif ($tab === 'analytics') $this->render_analytics();
         else $this->render_settings();
         echo '</div><style>.orion-admin .orion-card{max-width:900px;background:#fff;border:1px solid #dcdcde;border-radius:10px;padding:22px;margin-top:20px}.orion-admin .orion-doc{border-top:1px solid #eee;padding:12px 0}.orion-admin .orion-doc summary{cursor:pointer;font-weight:600}.orion-admin textarea{max-width:100%}.orion-admin .orion-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.orion-admin .orion-metric{padding:16px;border:1px solid #dcdcde;border-radius:8px;background:#fff}.orion-admin .orion-metric strong{display:block;font-size:26px}</style>';
@@ -122,6 +124,25 @@ final class Orion_Admin_Controller {
         echo '</section>';
     }
 
+    private function render_handoffs(): void {
+        $items = (new Orion_Manager_Handoff())->all();
+        echo '<section class="orion-card"><h2>Manager follow-up queue</h2><p>Questions appear here only when the assistant cannot provide a confirmed answer or suitable product set.</p>';
+        if (!$items) echo '<p>No follow-up requests.</p>';
+        foreach ($items as $item) {
+            $context = json_decode((string)$item['context_json'], true);
+            echo '<article class="orion-doc"><p><strong>#' . (int)$item['id'] . ' — ' . esc_html(ucfirst($item['status'])) . '</strong><br><small>' . esc_html($item['created_at']) . '</small></p>';
+            echo '<p>' . nl2br(esc_html($item['question'])) . '</p>';
+            if (is_array($context)) echo '<details><summary>Context</summary><pre style="white-space:pre-wrap">' . esc_html(wp_json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) . '</pre></details>';
+            if ('resolved' !== $item['status']) {
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                wp_nonce_field('orion_ai_resolve_handoff');
+                echo '<input type="hidden" name="action" value="orion_ai_resolve_handoff"><input type="hidden" name="handoff_id" value="' . (int)$item['id'] . '"><button class="button button-primary">Mark resolved</button></form>';
+            }
+            echo '</article>';
+        }
+        echo '</section>';
+    }
+
     private function render_analytics(): void {
         $analytics = $this->conversations->analytics();
         echo '<section class="orion-card"><h2>Analytics — last ' . (int) $analytics['days'] . ' days</h2><div class="orion-metrics"><div class="orion-metric"><span>Conversations started</span><strong>' . (int) $analytics['conversations'] . '</strong></div>';
@@ -129,6 +150,13 @@ final class Orion_Admin_Controller {
             echo '<div class="orion-metric"><span>' . esc_html(str_replace('_', ' ', $event['event_type'])) . '</span><strong>' . (int) $event['total'] . '</strong></div>';
         }
         echo '</div><p class="description">Events are aggregate operational metrics. Customer message text is not shown on this screen.</p></section>';
+    }
+
+    public function handle_resolve_handoff(): void {
+        $this->guard('orion_ai_resolve_handoff');
+        $id = absint($_POST['handoff_id'] ?? 0);
+        $ok = $id > 0 && (new Orion_Manager_Handoff())->resolve($id);
+        $this->redirect('handoffs', $ok ? 'Follow-up marked resolved.' : 'Follow-up could not be updated.');
     }
 
     public function handle_test_provider(): void {
