@@ -1,0 +1,68 @@
+name: Add manager queue
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Patch admin queue
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-admin-controller.php');s=p.read_text()
+          anchor="        add_action('admin_post_orion_ai_remove_key', array($this, 'handle_remove_key'));"
+          s=s.replace(anchor,anchor+"\n        add_action('admin_post_orion_ai_resolve_handoff', array($this, 'handle_resolve_handoff'));",1)
+          s=s.replace("if (!in_array($tab, array('settings', 'knowledge', 'analytics'), true))", "if (!in_array($tab, array('settings', 'knowledge', 'handoffs', 'analytics'), true))",1)
+          s=s.replace("$tabs = array('settings' => 'Assistant settings', 'knowledge' => 'Knowledge base', 'analytics' => 'Analytics');", "$tabs = array('settings' => 'Assistant settings', 'knowledge' => 'Knowledge base', 'handoffs' => 'Manager queue', 'analytics' => 'Analytics');",1)
+          s=s.replace("        if ($tab === 'knowledge') $this->render_knowledge();\n        elseif ($tab === 'analytics')", "        if ($tab === 'knowledge') $this->render_knowledge();\n        elseif ($tab === 'handoffs') $this->render_handoffs();\n        elseif ($tab === 'analytics')",1)
+          marker="    private function render_analytics(): void {"
+          method='''    private function render_handoffs(): void {
+                  $items = (new Orion_Manager_Handoff())->all();
+                  echo '<section class="orion-card"><h2>Manager follow-up queue</h2><p>Questions appear here only when the assistant cannot provide a confirmed answer or suitable product set.</p>';
+                  if (!$items) echo '<p>No follow-up requests.</p>';
+                  foreach ($items as $item) {
+                      $context = json_decode((string)$item['context_json'], true);
+                      echo '<article class="orion-doc"><p><strong>#' . (int)$item['id'] . ' — ' . esc_html(ucfirst($item['status'])) . '</strong><br><small>' . esc_html($item['created_at']) . '</small></p>';
+                      echo '<p>' . nl2br(esc_html($item['question'])) . '</p>';
+                      if (is_array($context)) echo '<details><summary>Context</summary><pre style="white-space:pre-wrap">' . esc_html(wp_json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) . '</pre></details>';
+                      if ('resolved' !== $item['status']) {
+                          echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                          wp_nonce_field('orion_ai_resolve_handoff');
+                          echo '<input type="hidden" name="action" value="orion_ai_resolve_handoff"><input type="hidden" name="handoff_id" value="' . (int)$item['id'] . '"><button class="button button-primary">Mark resolved</button></form>';
+                      }
+                      echo '</article>';
+                  }
+                  echo '</section>';
+              }
+
+          '''
+          if marker not in s: raise SystemExit('analytics marker missing')
+          s=s.replace(marker,method+marker,1)
+          marker="    public function handle_test_provider(): void {"
+          handler='''    public function handle_resolve_handoff(): void {
+                  $this->guard('orion_ai_resolve_handoff');
+                  $id = absint($_POST['handoff_id'] ?? 0);
+                  $ok = $id > 0 && (new Orion_Manager_Handoff())->resolve($id);
+                  $this->redirect('handoffs', $ok ? 'Follow-up marked resolved.' : 'Follow-up could not be updated.');
+              }
+
+          '''
+          if marker not in s: raise SystemExit('handler marker missing')
+          p.write_text(s.replace(marker,handler+marker,1))
+          PY
+      - name: Commit queue UI
+        run: |
+          rm .github/workflows/add-manager-queue.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-admin-controller.php .github/workflows/add-manager-queue.yml
+          git commit -m "feat: add manager follow-up queue to admin"
+          git push origin feature/semantic-routing
