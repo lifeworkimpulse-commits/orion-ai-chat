@@ -1,0 +1,81 @@
+name: Add trace admin
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Patch admin and schema
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-admin-controller.php');s=p.read_text()
+          s=s.replace("array('settings', 'knowledge', 'handoffs', 'analytics')","array('settings', 'knowledge', 'handoffs', 'traces', 'analytics')",1)
+          s=s.replace("'handoffs' => 'Manager queue', 'analytics'","'handoffs' => 'Manager queue', 'traces' => 'AI traces', 'analytics'",1)
+          s=s.replace("elseif ($tab === 'analytics') $this->render_analytics();","elseif ($tab === 'traces') $this->render_traces();\n        elseif ($tab === 'analytics') $this->render_analytics();",1)
+          marker="    private function render_analytics(): void {"
+          method='''    private function render_traces(): void {
+                  $service = new Orion_AI_Trace_Service();
+                  $selected = absint($_GET['trace_id'] ?? 0);
+                  echo '<section class="orion-card"><h2>AI request traces</h2><p>Diagnostic pipeline data with secrets redacted. Customer messages are retained according to the plugin retention setting.</p>';
+                  if ($selected) {
+                      $trace = $service->get($selected);
+                      if ($trace) echo '<p><a href="' . esc_url(add_query_arg(array('page'=>'orion-ai-assistant','tab'=>'traces'),admin_url('admin.php'))) . '">← Back to traces</a></p><pre style="white-space:pre-wrap;max-height:700px;overflow:auto">' . esc_html(wp_json_encode($trace, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
+                      else echo '<p>Trace not found.</p>';
+                      echo '</section>'; return;
+                  }
+                  $items = $service->all(100);
+                  if (!$items) echo '<p>No traces recorded yet.</p>';
+                  else { echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Provider/model</th><th>Intent/topic</th><th>Status</th><th>Failure</th><th>Duration</th><th>Date</th></tr></thead><tbody>';
+                      foreach ($items as $item) { $url=add_query_arg(array('page'=>'orion-ai-assistant','tab'=>'traces','trace_id'=>(int)$item['id']),admin_url('admin.php')); echo '<tr><td><a href="'.esc_url($url).'">#'.(int)$item['id'].'</a></td><td>'.esc_html($item['provider'].' / '.$item['model']).'</td><td>'.esc_html($item['intent'].' / '.$item['topic']).'</td><td>'.esc_html($item['status']).'</td><td>'.esc_html(trim($item['failure_stage'].' '.$item['failure_reason'])).'</td><td>'.(int)$item['duration_ms'].' ms</td><td>'.esc_html($item['created_at']).'</td></tr>'; }
+                      echo '</tbody></table>'; }
+                  echo '</section>';
+              }
+
+          '''
+          if marker not in s: raise SystemExit('analytics marker missing')
+          p.write_text(s.replace(marker,method+marker,1))
+
+          p=Path('includes/class-orion-ai-assistant.php');s=p.read_text()
+          old='''"CREATE TABLE {$wpdb->prefix}orion_ai_traces (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NULL,trace_key CHAR(36) NOT NULL,provider VARCHAR(20) NOT NULL,model VARCHAR(191) NOT NULL,intent VARCHAR(50) NOT NULL,topic VARCHAR(100) NOT NULL,status VARCHAR(30) NOT NULL,failure_stage VARCHAR(80) NOT NULL,failure_reason TEXT NOT NULL,duration_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,payload_json LONGTEXT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,PRIMARY KEY  (id),UNIQUE KEY trace_key (trace_key),KEY conversation_id (conversation_id),KEY status (status),KEY failure_stage (failure_stage),KEY created_at (created_at)) $c;"'''
+          new='''"CREATE TABLE {$wpdb->prefix}orion_ai_traces (
+           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+           conversation_id BIGINT UNSIGNED NULL,
+           trace_key CHAR(36) NOT NULL,
+           provider VARCHAR(20) NOT NULL,
+           model VARCHAR(191) NOT NULL,
+           intent VARCHAR(50) NOT NULL,
+           topic VARCHAR(100) NOT NULL,
+           status VARCHAR(30) NOT NULL,
+           failure_stage VARCHAR(80) NOT NULL,
+           failure_reason TEXT NOT NULL,
+           duration_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
+           payload_json LONGTEXT NULL,
+           created_at DATETIME NOT NULL,
+           updated_at DATETIME NOT NULL,
+           PRIMARY KEY  (id),
+           UNIQUE KEY trace_key (trace_key),
+           KEY conversation_id (conversation_id),
+           KEY status (status),
+           KEY failure_stage (failure_stage),
+           KEY created_at (created_at)
+          ) $c;"'''
+          if old not in s: raise SystemExit('trace schema string missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/add-trace-admin.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-admin-controller.php includes/class-orion-ai-assistant.php .github/workflows/add-trace-admin.yml
+          git commit -m "feat: add admin AI trace viewer and reliable trace schema"
+          git push origin feature/semantic-routing
