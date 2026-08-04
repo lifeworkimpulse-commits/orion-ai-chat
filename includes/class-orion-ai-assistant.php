@@ -3,12 +3,28 @@ if(!defined('ABSPATH')){exit;}
 final class Orion_AI_Assistant{
  private static ?self $instance=null;private Orion_Admin_Controller $admin;private Orion_REST_Controller $rest;
  public static function instance():self{return self::$instance??=new self();}
- private function __construct(){self::maybe_upgrade();add_action(Orion_Cleanup::HOOK,array(Orion_Cleanup::class,'run'));Orion_Cleanup::schedule();$knowledge=new Orion_Knowledge_Base();$products=new Orion_Product_Search();$conversations=new Orion_Conversation_Service();$rate=new Orion_Rate_Limiter();$classifier=new Orion_Intent_Classifier();$context=new Orion_Context_Manager();$planner=new Orion_Semantic_Product_Planner($products);$handoff=new Orion_Manager_Handoff();$traces=new Orion_AI_Trace_Service();$chat=new Orion_Chat_Orchestrator($conversations,$rate,$knowledge,$planner,$classifier,$context,$handoff,$traces);$this->admin=new Orion_Admin_Controller($knowledge,$conversations);$this->rest=new Orion_REST_Controller($chat,$rate,$conversations);$this->admin->register();add_action('wp_enqueue_scripts',array($this,'enqueue_widget'));add_action('rest_api_init',array($this->rest,'register_routes'));}
+ private function __construct(){self::maybe_upgrade();add_action(Orion_Cleanup::HOOK,array(Orion_Cleanup::class,'run'));Orion_Cleanup::schedule();$knowledge=new Orion_Knowledge_Base();$product_index=new Orion_Product_Index();$product_index->register_hooks();$products=new Orion_Product_Search();$conversations=new Orion_Conversation_Service();$rate=new Orion_Rate_Limiter();$classifier=new Orion_Intent_Classifier();$context=new Orion_Context_Manager();$planner=new Orion_Semantic_Product_Planner($products);$handoff=new Orion_Manager_Handoff();$traces=new Orion_AI_Trace_Service();$chat=new Orion_Chat_Orchestrator($conversations,$rate,$knowledge,$planner,$classifier,$context,$handoff,$traces);$this->admin=new Orion_Admin_Controller($knowledge,$conversations);$this->rest=new Orion_REST_Controller($chat,$rate,$conversations);$this->admin->register();add_action('wp_enqueue_scripts',array($this,'enqueue_widget'));add_action('rest_api_init',array($this->rest,'register_routes'));}
  public static function activate():void{if(!Orion_Environment::ready())wp_die(esc_html(implode(' ',Orion_Environment::issues())));self::install_schema();if(null===get_option(Orion_AI_Settings::OPTION,null))add_option(Orion_AI_Settings::OPTION,Orion_AI_Settings::defaults());Orion_Cleanup::schedule();}
  public static function deactivate():void{wp_clear_scheduled_hook(Orion_Cleanup::HOOK);}public static function maybe_upgrade():void{if(get_option('orion_ai_schema_version')!==ORION_AI_SCHEMA_VERSION)self::install_schema();}public static function run_migrations():void{self::install_schema();}
  private static function install_schema():void{global$wpdb;require_once ABSPATH.'wp-admin/includes/upgrade.php';$c=$wpdb->get_charset_collate();$sqls=array(
  "CREATE TABLE {$wpdb->prefix}orion_ai_documents (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,source_url TEXT NOT NULL,title TEXT NOT NULL,markdown LONGTEXT NOT NULL,content_hash CHAR(64) NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,PRIMARY KEY  (id),KEY content_hash (content_hash)) $c;",
  "CREATE TABLE {$wpdb->prefix}orion_ai_document_chunks (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,document_id BIGINT UNSIGNED NOT NULL,position SMALLINT UNSIGNED NOT NULL DEFAULT 0,heading TEXT NOT NULL,content LONGTEXT NOT NULL,content_hash CHAR(64) NOT NULL,created_at DATETIME NOT NULL,PRIMARY KEY  (id),KEY document_id (document_id),KEY content_hash (content_hash)) $c;",
+ "CREATE TABLE {$wpdb->prefix}orion_ai_product_index (
+ product_id BIGINT UNSIGNED NOT NULL,
+ title TEXT NOT NULL,
+ content LONGTEXT NOT NULL,
+ categories TEXT NOT NULL,
+ tags TEXT NOT NULL,
+ attributes LONGTEXT NOT NULL,
+ product_type VARCHAR(30) NOT NULL,
+ stock_status VARCHAR(30) NOT NULL,
+ is_visible TINYINT UNSIGNED NOT NULL DEFAULT 1,
+ content_hash CHAR(64) NOT NULL,
+ updated_at DATETIME NOT NULL,
+ PRIMARY KEY  (product_id),
+ KEY stock_visibility (stock_status,is_visible),
+ FULLTEXT KEY search_text (title,content,categories,tags,attributes)
+) $c;",
  "CREATE TABLE {$wpdb->prefix}orion_ai_conversations (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,client_hash CHAR(64) NOT NULL,session_key CHAR(36) NOT NULL,day_key CHAR(10) NOT NULL,question_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,last_activity DATETIME NOT NULL,created_at DATETIME NOT NULL,state_json LONGTEXT NULL,PRIMARY KEY  (id),KEY client_day (client_hash,day_key),UNIQUE KEY session_key (session_key)) $c;",
  "CREATE TABLE {$wpdb->prefix}orion_ai_messages (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NOT NULL,role VARCHAR(20) NOT NULL,content LONGTEXT NOT NULL,usage_json LONGTEXT NULL,created_at DATETIME NOT NULL,PRIMARY KEY  (id),KEY conversation_id (conversation_id)) $c;",
  "CREATE TABLE {$wpdb->prefix}orion_ai_events (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NULL,event_type VARCHAR(64) NOT NULL,payload_json LONGTEXT NULL,created_at DATETIME NOT NULL,PRIMARY KEY  (id),KEY event_type (event_type),KEY created_at (created_at),KEY conversation_id (conversation_id)) $c;",
