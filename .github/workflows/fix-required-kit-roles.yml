@@ -1,0 +1,50 @@
+name: Fix required catalogue roles
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Patch classifier, planner and version
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-intent-classifier.php');s=p.read_text()
+          old='Product search roles must be actual catalogue product functions such as primary_coating, primer, cleaner, filler, roller, brush or tray. Never use personas or services such as researcher, specialist, analyst, installer or cost analysis as product roles.'
+          new='Product search roles must be actual catalogue product functions such as primary_coating, primer, cleaner, filler, roller, brush or tray. Only the principal material may be required by default. Primer, filler, cleaner, roller, brush, tray, masking tape, dust sheet, sandpaper and scraper are optional unless the user explicitly requests that exact product. Never use personas or services such as researcher, specialist, analyst, installer or cost analysis as product roles.'
+          if old not in s: raise SystemExit('classifier prompt marker missing')
+          s=s.replace(old,new,1)
+          old="$plan=is_array($data['search_plan']??null)?$data['search_plan']:array();foreach(array_slice($plan,0,10)as$item)"
+          new="$plan=is_array($data['search_plan']??null)?$data['search_plan']:array();$optional_roles=array('primer','filler','cleaner','roller','brush','tray','masking_tape','dust_sheet','sandpaper','scraper','tool');foreach(array_slice($plan,0,10)as$item)"
+          if old not in s: raise SystemExit('classifier plan marker missing')
+          s=s.replace(old,new,1)
+          old="'required'=>!empty($item['required']),'requirements'=>$clean"
+          new="'required'=>!empty($item['required'])&&!in_array($role,$optional_roles,true),'requirements'=>$clean"
+          if old not in s: raise SystemExit('classifier required marker missing')
+          s=s.replace(old,new,1);p.write_text(s)
+          p=Path('includes/class-orion-semantic-product-planner.php');s=p.read_text()
+          old="'description'=>$product['short_description']"
+          new="'description'=>$product['description']??$product['short_description']"
+          if old not in s: raise SystemExit('planner description marker missing')
+          p.write_text(s.replace(old,new,1))
+          p=Path('orion-ai-assistant.php');s=p.read_text()
+          if "Version: 0.10.0" not in s or "ORION_AI_VERSION','0.10.0'" not in s: raise SystemExit('version markers missing')
+          s=s.replace('Version: 0.10.0','Version: 0.10.1',1).replace("ORION_AI_VERSION','0.10.0'","ORION_AI_VERSION','0.10.1'",1)
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/fix-required-kit-roles.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-intent-classifier.php includes/class-orion-semantic-product-planner.php orion-ai-assistant.php .github/workflows/fix-required-kit-roles.yml
+          git commit -m "fix: allow grounded partial kits when accessories are absent"
+          git push origin feature/semantic-routing
