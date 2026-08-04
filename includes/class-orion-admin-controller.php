@@ -191,6 +191,7 @@ final class Orion_Admin_Controller {
         $provider = sanitize_key(wp_unslash($_POST['provider'] ?? 'openrouter'));
         $settings = Orion_AI_Settings::get();
         $settings['provider'] = in_array($provider, array('openrouter', 'google'), true) ? $provider : 'openrouter';
+        $settings['fallback_provider'] = 'none';
         $result = Orion_AI_Provider_Factory::create($settings)->chat(array(array('role' => 'user', 'content' => 'Reply with exactly: Connection successful')));
         $message = !empty($result['ok']) ? ucfirst($settings['provider']) . ' connection successful.' : (string)($result['error'] ?? 'Connection failed.');
         $this->redirect('settings', $message);
