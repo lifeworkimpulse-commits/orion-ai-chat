@@ -1,0 +1,38 @@
+name: Fix Gemini tool schema
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Normalize Gemini schemas
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-gemini-client.php');s=p.read_text()
+          old="$decl[]=array('name'=>$fn['name']??'','description'=>$fn['description']??'','parameters'=>$fn['parameters']??array('type'=>'object'));"
+          new="$decl[]=array('name'=>$fn['name']??'','description'=>$fn['description']??'','parameters'=>$this->schema(is_array($fn['parameters']??null)?$fn['parameters']:array('type'=>'object')));"
+          if old not in s: raise SystemExit('Gemini declaration marker missing')
+          s=s.replace(old,new,1)
+          marker=" private function body(array $messages,array $tools):array"
+          method=" private function schema(array $schema):array{unset($schema['additionalProperties'],$schema['$schema'],$schema['unevaluatedProperties']);if(isset($schema['properties'])&&is_array($schema['properties']))foreach($schema['properties']as$key=>$value)if(is_array($value))$schema['properties'][$key]=$this->schema($value);if(isset($schema['items'])&&is_array($schema['items']))$schema['items']=$this->schema($schema['items']);if(isset($schema['oneOf'])&&is_array($schema['oneOf']))$schema['oneOf']=array_map(fn($v)=>is_array($v)?$this->schema($v):$v,$schema['oneOf']);if(isset($schema['anyOf'])&&is_array($schema['anyOf']))$schema['anyOf']=array_map(fn($v)=>is_array($v)?$this->schema($v):$v,$schema['anyOf']);return$schema;}\n"
+          if marker not in s: raise SystemExit('Gemini body marker missing')
+          p.write_text(s.replace(marker,method+marker,1))
+          p=Path('orion-ai-assistant.php');s=p.read_text().replace('Version: 0.9.0','Version: 0.9.1',1).replace("define('ORION_AI_VERSION','0.9.0')","define('ORION_AI_VERSION','0.9.1')",1);p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/fix-gemini-schema.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-gemini-client.php orion-ai-assistant.php .github/workflows/fix-gemini-schema.yml
+          git commit -m "fix: normalize OpenAI tool schemas for Gemini"
+          git push origin feature/semantic-routing
