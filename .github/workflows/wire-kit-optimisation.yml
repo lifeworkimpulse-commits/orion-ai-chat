@@ -1,0 +1,68 @@
+name: Wire kit optimisation
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Wire diagnostics, responses and evaluation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('orion-ai-assistant.php');s=p.read_text()
+          if 'Version: 0.11.0' not in s or "ORION_AI_VERSION','0.11.0'" not in s: raise SystemExit('version markers missing')
+          s=s.replace('Version: 0.11.0','Version: 0.11.1',1).replace("ORION_AI_VERSION','0.11.0'","ORION_AI_VERSION','0.11.1'",1)
+          p.write_text(s)
+
+          p=Path('includes/class-orion-diagnostics-service.php');s=p.read_text()
+          old="array('id'=>$p['id'],'name'=>$p['name'],'role'=>$p['kit_role']??'')"
+          new="array('id'=>$p['id'],'name'=>$p['name'],'role'=>$p['kit_role']??'','roles'=>$p['kit_roles']??array($p['kit_role']??''))"
+          if old not in s: raise SystemExit('diagnostic selected marker missing')
+          s=s.replace(old,new,1)
+          old="'missing_roles'=>$kit['missing_roles'],'plan'=>"
+          new="'missing_roles'=>$kit['missing_roles'],'conditional_roles'=>$kit['conditional_roles']??array(),'plan'=>"
+          if old not in s: raise SystemExit('diagnostic roles marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('includes/class-orion-chat-orchestrator.php');s=p.read_text()
+          old="'missing_roles'=>$kit['missing_roles'],'required_missing'=>$required_missing"
+          new="'missing_roles'=>$kit['missing_roles'],'conditional_roles'=>$kit['conditional_roles']??array(),'selection_diagnostic'=>$kit['diagnostic']??array(),'required_missing'=>$required_missing"
+          if old not in s: raise SystemExit('trace roles marker missing')
+          s=s.replace(old,new,1)
+          old='Present missing application tools briefly, then separate primer, filler, sandpaper, scraper and cleaner as conditional preparation items that depend on surface condition. Never imply that every missing optional role is required.'
+          new='Present missing application tools briefly. conditional_roles are deferred preparation items, not missing products: explain briefly that they may be needed only when surface condition requires them. Never imply that every optional role is required. Follow the supplied product order, which is already prioritised for visible cards.'
+          if old not in s: raise SystemExit('answer prompt marker missing')
+          s=s.replace(old,new,1)
+          old="'verified_products'=>$kit['products'],'missing_roles'=>$kit['missing_roles']"
+          new="'verified_products'=>$kit['products'],'missing_roles'=>$kit['missing_roles'],'conditional_roles'=>$kit['conditional_roles']??array()"
+          if old not in s: raise SystemExit('answer payload marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('includes/class-orion-evaluation-service.php');s=p.read_text()
+          old="foreach(($case['expected_state']??array())as$key=>$value)$checks[]=isset($state[$key])&&(string)$state[$key]===(string)$value;$diagnostic="
+          new="foreach(($case['expected_state']??array())as$key=>$value)$checks[]=isset($state[$key])&&(string)$state[$key]===(string)$value;$actual_roles=array_column((array)($last['search_plan']??array()),'role');foreach(($case['expected_roles']??array())as$role)$checks[]=in_array($role,$actual_roles,true);foreach(($case['expected_optional_roles']??array())as$role){$optional=false;foreach((array)($last['search_plan']??array())as$item)if(($item['role']??'')===$role&&empty($item['required']))$optional=true;$checks[]=$optional;}$diagnostic="
+          if old not in s: raise SystemExit('evaluation marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('tests/evals/core-conversations.json');import json
+          cases=json.loads(p.read_text())
+          if not any(c.get('name')=='Complete ceiling kit roles' for c in cases):
+              cases.append({'name':'Complete ceiling kit roles','messages':['I need to paint a 10 square metre ceiling white. Find everything needed.'],'expected_intent':'project_recommendation','expected_state':{'surface':'ceiling','area_m2':10,'colour':'white'},'expected_roles':['primary_coating','roller','brush','tray'],'expected_optional_roles':['roller','brush','tray']})
+          p.write_text(json.dumps(cases,ensure_ascii=False,indent=2)+'\n')
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/wire-kit-optimisation.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add orion-ai-assistant.php includes/class-orion-diagnostics-service.php includes/class-orion-chat-orchestrator.php includes/class-orion-evaluation-service.php tests/evals/core-conversations.json .github/workflows/wire-kit-optimisation.yml
+          git commit -m "feat: complete retrieval and kit optimisation 0.11.1"
+          git push origin feature/semantic-routing
