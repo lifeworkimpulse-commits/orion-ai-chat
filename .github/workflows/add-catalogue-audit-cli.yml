@@ -1,0 +1,39 @@
+name: Add catalogue audit CLI
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Add command
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-cli-command.php');s=p.read_text()
+          marker=" private function count(string $table,string $where=''):int"
+          method=''' /**
+           * Audit published WooCommerce catalogue data without making changes.
+           *
+           * @subcommand catalogue-audit
+           */
+           public function catalogue_audit(array $args,array $assoc_args):void{$limit=absint($assoc_args['limit']??0);$format=sanitize_key((string)($assoc_args['format']??'table'));$report=(new Orion_Catalogue_Audit())->run($limit);if(!empty($report['summary']['error']))WP_CLI::error((string)$report['summary']['error']);if('json'===$format){WP_CLI::log(wp_json_encode($report,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));return;}$summary=array();foreach($report['summary']as$key=>$value)$summary[]=array('metric'=>str_replace('_',' ',$key),'value'=>$value);WP_CLI::log('Catalogue readiness summary');WP_CLI\\Utils\\format_items('table',$summary,array('metric','value'));$counts=array();foreach($report['issue_counts']as$code=>$total)$counts[]=array('issue'=>$code,'count'=>$total);if($counts){WP_CLI::log('Issue counts');WP_CLI\\Utils\\format_items('table',$counts,array('issue','count'));}else WP_CLI::success('No catalogue readiness issues found.');if(!empty($assoc_args['details'])&&!empty($report['issues'])){WP_CLI::log('Issue details (first 200)');WP_CLI\\Utils\\format_items('table',array_slice($report['issues'],0,200),array('product_id','variation_id','product','code','message'));}WP_CLI::success('Read-only catalogue audit completed. No products were changed.');}
+          '''
+          if marker not in s: raise SystemExit('CLI insertion marker missing')
+          p.write_text(s.replace(marker,method+marker,1))
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/add-catalogue-audit-cli.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-cli-command.php .github/workflows/add-catalogue-audit-cli.yml
+          git commit -m "feat: add read-only catalogue-audit command"
+          git push origin feature/semantic-routing
