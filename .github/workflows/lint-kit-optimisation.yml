@@ -19,7 +19,7 @@ jobs:
       - name: PHP syntax
         run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
       - name: Validate evaluation JSON
-        run: php -r '$d=json_decode(file_get_contents("tests/evals/core-conversations.json"),true); if(!is_array($d)){exit(1);} echo count($d)," evaluation cases\n";'
+        run: python3 -m json.tool tests/evals/core-conversations.json >/dev/null
       - name: Remove one-time workflow
         run: |
           rm .github/workflows/lint-kit-optimisation.yml
