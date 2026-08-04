@@ -1,7 +1,72 @@
 [
-  {"name":"Implicit pallet delivery","messages":["Can you get a pallet to M1?"],"expected_intent":"store_policy"},
-  {"name":"Garage dimensions and unit","messages":["My garage is six by four and I want a durable grey finish.","m"],"expected_intent":"project_recommendation","expected_state":{"area_m2":24,"colour":"grey"}},
-  {"name":"Context colour update","messages":["My garage is six by four and I want a durable grey finish.","m","Make it blue instead."],"expected_intent":"project_recommendation","expected_state":{"area_m2":24,"colour":"blue"}},
-  {"name":"Switch from project to returns","messages":["I need to coat my garage floor.","Now tell me your returns policy."],"expected_intent":"store_policy"},
-  {"name":"Ambiguous linear measurement","messages":["I need paint for 20 m."],"expected_intent":"project_recommendation"}
+  {
+    "name": "Implicit pallet delivery",
+    "messages": [
+      "Can you get a pallet to M1?"
+    ],
+    "expected_intent": "store_policy"
+  },
+  {
+    "name": "Garage dimensions and unit",
+    "messages": [
+      "My garage is six by four and I want a durable grey finish.",
+      "m"
+    ],
+    "expected_intent": "project_recommendation",
+    "expected_state": {
+      "area_m2": 24,
+      "colour": "grey"
+    }
+  },
+  {
+    "name": "Context colour update",
+    "messages": [
+      "My garage is six by four and I want a durable grey finish.",
+      "m",
+      "Make it blue instead."
+    ],
+    "expected_intent": "project_recommendation",
+    "expected_state": {
+      "area_m2": 24,
+      "colour": "blue"
+    }
+  },
+  {
+    "name": "Switch from project to returns",
+    "messages": [
+      "I need to coat my garage floor.",
+      "Now tell me your returns policy."
+    ],
+    "expected_intent": "store_policy"
+  },
+  {
+    "name": "Ambiguous linear measurement",
+    "messages": [
+      "I need paint for 20 m."
+    ],
+    "expected_intent": "project_recommendation"
+  },
+  {
+    "name": "Complete ceiling kit roles",
+    "messages": [
+      "I need to paint a 10 square metre ceiling white. Find everything needed."
+    ],
+    "expected_intent": "project_recommendation",
+    "expected_state": {
+      "surface": "ceiling",
+      "area_m2": 10,
+      "colour": "white"
+    },
+    "expected_roles": [
+      "primary_coating",
+      "roller",
+      "brush",
+      "tray"
+    ],
+    "expected_optional_roles": [
+      "roller",
+      "brush",
+      "tray"
+    ]
+  }
 ]
