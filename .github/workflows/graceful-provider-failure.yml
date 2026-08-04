@@ -1,0 +1,34 @@
+name: Graceful provider failure
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Patch provider failure handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-chat-orchestrator.php');s=p.read_text()
+          old="$this->traces->update($this->trace_id,array('intent'=>$classification['intent'],'topic'=>$classification['topic'],'stages'=>array('classification'=>$classification)));$state=$this->context->apply($state,$classification);"
+          new="$this->traces->update($this->trace_id,array('intent'=>$classification['intent'],'topic'=>$classification['topic'],'stages'=>array('classification'=>$classification)));$diagnostic_status=(string)($classification['_diagnostic']['status']??'');if(in_array($diagnostic_status,array('provider_error','invalid_output'),true)){$stage='provider_error'===$diagnostic_status?'classification_provider_error':'classification_invalid_output';$reason=(string)($classification['_diagnostic']['error']??'The AI provider returned no valid routing response.');$this->traces->complete($this->trace_id,'failed',$stage,$reason,$this->elapsed());return new WP_Error('ai_temporarily_unavailable','The AI service is temporarily unavailable. Please try again.',array('status'=>503,'trace_id'=>$this->trace_id));}$state=$this->context->apply($state,$classification);"
+          if old not in s: raise SystemExit('classification marker missing')
+          p.write_text(s.replace(old,new,1))
+          p=Path('orion-ai-assistant.php');s=p.read_text().replace('Version: 0.8.3','Version: 0.8.4',1).replace("define('ORION_AI_VERSION','0.8.3')","define('ORION_AI_VERSION','0.8.4')",1);p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/graceful-provider-failure.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-chat-orchestrator.php orion-ai-assistant.php .github/workflows/graceful-provider-failure.yml
+          git commit -m "fix: do not create handoffs for provider outages"
+          git push origin feature/semantic-routing
