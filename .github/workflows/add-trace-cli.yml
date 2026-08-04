@@ -1,0 +1,40 @@
+name: Add trace CLI
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Patch CLI
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-cli-command.php');s=p.read_text()
+          s=s.replace("$tables=array('documents','document_chunks','conversations','messages','events','handoffs');","$tables=array('documents','document_chunks','conversations','messages','events','handoffs','traces');",1)
+          anchor="$rows[]=array('check'=>'Open handoffs','value'=>(string)$this->count($wpdb->prefix.'orion_ai_handoffs',\"status='new'\"),'status'=>'INFO');"
+          s=s.replace(anchor,anchor+"$rows[]=array('check'=>'AI traces','value'=>(string)$this->count($wpdb->prefix.'orion_ai_traces'),'status'=>'INFO');",1)
+          marker=" private function count(string $table,string $where=''):int"
+          methods=''' /** Diagnose a prompt without saving a conversation or creating a handoff. */
+           public function diagnose(array $args,array $assoc_args):void{$prompt=trim((string)($assoc_args['prompt']??implode(' ',$args)));if($prompt==='')WP_CLI::error('Provide --prompt="...".');$settings=Orion_AI_Settings::get();$provider=sanitize_key((string)($assoc_args['provider']??Orion_AI_Settings::provider($settings)));if(!in_array($provider,array('openrouter','google'),true))WP_CLI::error('Provider must be openrouter or google.');$settings['provider']=$provider;if(!empty($assoc_args['model']))$settings['google'===$provider?'google_model':'openrouter_model']=sanitize_text_field((string)$assoc_args['model']);$service=new Orion_AI_Diagnostics_Service(new Orion_Intent_Classifier(),new Orion_Knowledge_Base(),new Orion_Semantic_Product_Planner(new Orion_Product_Search()));$report=$service->run($prompt,$settings);WP_CLI::log(wp_json_encode($report,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));}
+           /** Inspect AI traces: list or show <id>. */
+           public function traces(array $args,array $assoc_args):void{$action=sanitize_key((string)($args[0]??'list'));$service=new Orion_AI_Trace_Service();if('show'===$action){$id=absint($args[1]??0);if(!$id)WP_CLI::error('Provide a trace ID.');$trace=$service->get($id);if(!$trace)WP_CLI::error('Trace #'.$id.' does not exist.');WP_CLI::log(wp_json_encode($trace,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));return;}$items=$service->all(absint($assoc_args['limit']??50));$format=sanitize_key((string)($assoc_args['format']??'table'));WP_CLI\\Utils\\format_items($format,$items,array('id','provider','model','intent','topic','status','failure_stage','duration_ms','created_at'));}
+          '''
+          if marker not in s: raise SystemExit('CLI marker missing')
+          p.write_text(s.replace(marker,methods+marker,1))
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/add-trace-cli.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-cli-command.php .github/workflows/add-trace-cli.yml
+          git commit -m "feat: add orion-ai diagnose and traces commands"
+          git push origin feature/semantic-routing
