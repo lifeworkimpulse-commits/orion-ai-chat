@@ -33,8 +33,8 @@ final class Orion_Admin_Controller {
     public function render(): void {
         if (!current_user_can('manage_woocommerce')) return;
         $tab = sanitize_key(wp_unslash($_GET['tab'] ?? 'settings'));
-        if (!in_array($tab, array('settings', 'knowledge', 'handoffs', 'analytics'), true)) $tab = 'settings';
-        $tabs = array('settings' => 'Assistant settings', 'knowledge' => 'Knowledge base', 'handoffs' => 'Manager queue', 'analytics' => 'Analytics');
+        if (!in_array($tab, array('settings', 'knowledge', 'handoffs', 'traces', 'analytics'), true)) $tab = 'settings';
+        $tabs = array('settings' => 'Assistant settings', 'knowledge' => 'Knowledge base', 'handoffs' => 'Manager queue', 'traces' => 'AI traces', 'analytics' => 'Analytics');
 
         echo '<div class="wrap orion-admin"><h1>Orion AI Assistant</h1>';
         if (!empty($_GET['orion_notice'])) {
@@ -47,6 +47,7 @@ final class Orion_Admin_Controller {
         echo '</nav>';
         if ($tab === 'knowledge') $this->render_knowledge();
         elseif ($tab === 'handoffs') $this->render_handoffs();
+        elseif ($tab === 'traces') $this->render_traces();
         elseif ($tab === 'analytics') $this->render_analytics();
         else $this->render_settings();
         echo '</div><style>.orion-admin .orion-card{max-width:900px;background:#fff;border:1px solid #dcdcde;border-radius:10px;padding:22px;margin-top:20px}.orion-admin .orion-doc{border-top:1px solid #eee;padding:12px 0}.orion-admin .orion-doc summary{cursor:pointer;font-weight:600}.orion-admin textarea{max-width:100%}.orion-admin .orion-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.orion-admin .orion-metric{padding:16px;border:1px solid #dcdcde;border-radius:8px;background:#fff}.orion-admin .orion-metric strong{display:block;font-size:26px}</style>';
@@ -140,6 +141,24 @@ final class Orion_Admin_Controller {
             }
             echo '</article>';
         }
+        echo '</section>';
+    }
+
+    private function render_traces(): void {
+        $service = new Orion_AI_Trace_Service();
+        $selected = absint($_GET['trace_id'] ?? 0);
+        echo '<section class="orion-card"><h2>AI request traces</h2><p>Diagnostic pipeline data with secrets redacted. Customer messages are retained according to the plugin retention setting.</p>';
+        if ($selected) {
+            $trace = $service->get($selected);
+            if ($trace) echo '<p><a href="' . esc_url(add_query_arg(array('page'=>'orion-ai-assistant','tab'=>'traces'),admin_url('admin.php'))) . '">← Back to traces</a></p><pre style="white-space:pre-wrap;max-height:700px;overflow:auto">' . esc_html(wp_json_encode($trace, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre>';
+            else echo '<p>Trace not found.</p>';
+            echo '</section>'; return;
+        }
+        $items = $service->all(100);
+        if (!$items) echo '<p>No traces recorded yet.</p>';
+        else { echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Provider/model</th><th>Intent/topic</th><th>Status</th><th>Failure</th><th>Duration</th><th>Date</th></tr></thead><tbody>';
+            foreach ($items as $item) { $url=add_query_arg(array('page'=>'orion-ai-assistant','tab'=>'traces','trace_id'=>(int)$item['id']),admin_url('admin.php')); echo '<tr><td><a href="'.esc_url($url).'">#'.(int)$item['id'].'</a></td><td>'.esc_html($item['provider'].' / '.$item['model']).'</td><td>'.esc_html($item['intent'].' / '.$item['topic']).'</td><td>'.esc_html($item['status']).'</td><td>'.esc_html(trim($item['failure_stage'].' '.$item['failure_reason'])).'</td><td>'.(int)$item['duration_ms'].' ms</td><td>'.esc_html($item['created_at']).'</td></tr>'; }
+            echo '</tbody></table>'; }
         echo '</section>';
     }
 

@@ -13,7 +13,28 @@ final class Orion_AI_Assistant{
  "CREATE TABLE {$wpdb->prefix}orion_ai_messages (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NOT NULL,role VARCHAR(20) NOT NULL,content LONGTEXT NOT NULL,usage_json LONGTEXT NULL,created_at DATETIME NOT NULL,PRIMARY KEY  (id),KEY conversation_id (conversation_id)) $c;",
  "CREATE TABLE {$wpdb->prefix}orion_ai_events (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NULL,event_type VARCHAR(64) NOT NULL,payload_json LONGTEXT NULL,created_at DATETIME NOT NULL,PRIMARY KEY  (id),KEY event_type (event_type),KEY created_at (created_at),KEY conversation_id (conversation_id)) $c;",
  "CREATE TABLE {$wpdb->prefix}orion_ai_handoffs (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NOT NULL,question LONGTEXT NOT NULL,context_json LONGTEXT NULL,status VARCHAR(20) NOT NULL DEFAULT 'new',created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,PRIMARY KEY  (id),KEY status (status),KEY conversation_id (conversation_id)) $c;",
- "CREATE TABLE {$wpdb->prefix}orion_ai_traces (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,conversation_id BIGINT UNSIGNED NULL,trace_key CHAR(36) NOT NULL,provider VARCHAR(20) NOT NULL,model VARCHAR(191) NOT NULL,intent VARCHAR(50) NOT NULL,topic VARCHAR(100) NOT NULL,status VARCHAR(30) NOT NULL,failure_stage VARCHAR(80) NOT NULL,failure_reason TEXT NOT NULL,duration_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,payload_json LONGTEXT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,PRIMARY KEY  (id),UNIQUE KEY trace_key (trace_key),KEY conversation_id (conversation_id),KEY status (status),KEY failure_stage (failure_stage),KEY created_at (created_at)) $c;"
+ "CREATE TABLE {$wpdb->prefix}orion_ai_traces (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+ conversation_id BIGINT UNSIGNED NULL,
+ trace_key CHAR(36) NOT NULL,
+ provider VARCHAR(20) NOT NULL,
+ model VARCHAR(191) NOT NULL,
+ intent VARCHAR(50) NOT NULL,
+ topic VARCHAR(100) NOT NULL,
+ status VARCHAR(30) NOT NULL,
+ failure_stage VARCHAR(80) NOT NULL,
+ failure_reason TEXT NOT NULL,
+ duration_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
+ payload_json LONGTEXT NULL,
+ created_at DATETIME NOT NULL,
+ updated_at DATETIME NOT NULL,
+ PRIMARY KEY  (id),
+ UNIQUE KEY trace_key (trace_key),
+ KEY conversation_id (conversation_id),
+ KEY status (status),
+ KEY failure_stage (failure_stage),
+ KEY created_at (created_at)
+) $c;"
  );foreach($sqls as$sql)dbDelta($sql);update_option('orion_ai_schema_version',ORION_AI_SCHEMA_VERSION,false);}
  public function enqueue_widget():void{$s=Orion_AI_Settings::get();if('1'!==$s['enabled']||is_admin())return;wp_enqueue_style('orion-ai-widget',ORION_AI_URL.'assets/widget.css',array(),ORION_AI_VERSION);wp_enqueue_script('orion-ai-widget',ORION_AI_URL.'assets/widget.js',array(),ORION_AI_VERSION,true);wp_localize_script('orion-ai-widget','OrionAI',array('rest'=>esc_url_raw(rest_url('orion-ai/v1/')),'nonce'=>wp_create_nonce('wp_rest'),'title'=>$s['title'],'greeting'=>$s['greeting'],'limitMessage'=>$s['limit_message'],'position'=>$s['position'],'primaryColor'=>$s['primary_color'],'questionsPerSession'=>(int)$s['questions_per_session'],'quickPrompts'=>array('Help me choose products','I need materials for a project','Delivery and returns')));}
 }
