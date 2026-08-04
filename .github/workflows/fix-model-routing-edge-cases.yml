@@ -1,0 +1,56 @@
+name: Fix model routing edge cases
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Apply fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-ai-provider-factory.php');s=p.read_text()
+          old="$fallback_model=trim((string)($settings['fallback_model']??''))?:Orion_AI_Settings::stage_model($settings,$stage,$fallback_provider);"
+          new="$fallback_model=trim((string)($settings['fallback_model']??''));if($fallback_model==='')$fallback_model='google'===$fallback_provider?(string)($settings['google_model']??'gemini-2.5-flash'):(string)($settings['openrouter_model']??'openrouter/free');"
+          if old not in s: raise SystemExit('fallback model marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('includes/class-orion-cli-command.php');s=p.read_text()
+          old="if(!empty($assoc_args['model']))$settings['google'===$provider?'google_model':'openrouter_model']=sanitize_text_field((string)$assoc_args['model']);"
+          new="if(!empty($assoc_args['model'])){$model=sanitize_text_field((string)$assoc_args['model']);$settings['routing_model']=$model;$settings['selection_model']=$model;$settings['answer_model']=$model;}"
+          if old not in s: raise SystemExit('diagnose model marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('includes/class-orion-admin-controller.php');s=p.read_text()
+          old="$settings['provider'] = in_array($provider, array('openrouter', 'google'), true) ? $provider : 'openrouter';\n        $result = Orion_AI_Provider_Factory::create($settings)"
+          new="$settings['provider'] = in_array($provider, array('openrouter', 'google'), true) ? $provider : 'openrouter';\n        $settings['fallback_provider'] = 'none';\n        $result = Orion_AI_Provider_Factory::create($settings)"
+          if old not in s: raise SystemExit('admin test marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('includes/class-orion-chat-orchestrator.php');s=p.read_text()
+          s=s.replace("'usage'=>$result['usage']??array()))));if(!is_array($data)","'usage'=>$result['usage']??array(),'attempts'=>$result['attempts']??array(),'fallback_used'=>!empty($result['fallback_used'])))));if(!is_array($data)",1)
+          old="$answer=!empty($result['ok'])?trim((string)($result['message']['content']??'')):'';if($answer==='')"
+          new="$this->traces->update($this->trace_id,array('stages'=>array('answer_generation'=>array('attempts'=>$result['attempts']??array(),'fallback_used'=>!empty($result['fallback_used'])))));$answer=!empty($result['ok'])?trim((string)($result['message']['content']??'')):'';if($answer==='')"
+          if old not in s: raise SystemExit('product answer marker missing')
+          s=s.replace(old,new,1)
+          old2="$result=$provider->chat($messages);if(empty($result['ok']))"
+          new2="$result=$provider->chat($messages);$this->traces->update($this->trace_id,array('stages'=>array('answer_generation'=>array('attempts'=>$result['attempts']??array(),'fallback_used'=>!empty($result['fallback_used'])))));if(empty($result['ok']))"
+          if old2 not in s: raise SystemExit('general answer marker missing')
+          p.write_text(s.replace(old2,new2,1))
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/fix-model-routing-edge-cases.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-ai-provider-factory.php includes/class-orion-cli-command.php includes/class-orion-admin-controller.php includes/class-orion-chat-orchestrator.php .github/workflows/fix-model-routing-edge-cases.yml
+          git commit -m "fix: refine fallback model selection and diagnostics"
+          git push origin feature/semantic-routing
