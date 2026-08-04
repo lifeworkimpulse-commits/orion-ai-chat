@@ -1,0 +1,38 @@
+name: Refine complete kit planning
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Refine planning prompt and version
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-intent-classifier.php');s=p.read_text()
+          old='Only the principal material may be required by default. Primer, filler, cleaner, roller, brush, tray, masking tape, dust sheet, sandpaper and scraper are optional unless the user explicitly requests that exact product.'
+          new='When the user asks for everything needed, a complete kit or all materials, include relevant preparation and application product roles in search_plan. Only the principal material may be required by default. Primer, filler, cleaner, roller, brush, tray, masking tape, dust sheet, sandpaper and scraper must remain optional unless the user asks for that exact product as the primary request.'
+          if old not in s: raise SystemExit('classifier prompt marker missing')
+          p.write_text(s.replace(old,new,1))
+          p=Path('orion-ai-assistant.php');s=p.read_text()
+          if 'Version: 0.10.1' not in s or "ORION_AI_VERSION','0.10.1'" not in s: raise SystemExit('version markers missing')
+          s=s.replace('Version: 0.10.1','Version: 0.10.2',1).replace("ORION_AI_VERSION','0.10.1'","ORION_AI_VERSION','0.10.2'",1)
+          p.write_text(s)
+          Path('docs/complete-kit-planning.md').write_text('''# Complete kit planning\n\nVersion 0.10.2 keeps complete-kit requests comprehensive without allowing missing accessories to suppress a verified primary material.\n\nWhen a customer asks for everything needed, a complete kit or all materials, the semantic router should include relevant preparation and application roles such as primer, filler, roller, brush and tray. The principal material remains required; supporting roles remain optional unless the customer specifically asks for one of them as the primary product.\n\nMissing optional roles are reported to the answer stage but do not trigger a manager handoff when a confirmed principal material is available.\n''')
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/refine-complete-kit-plan.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-intent-classifier.php orion-ai-assistant.php docs/complete-kit-planning.md .github/workflows/refine-complete-kit-plan.yml
+          git commit -m "fix: preserve optional roles for complete kit requests"
+          git push origin feature/semantic-routing
