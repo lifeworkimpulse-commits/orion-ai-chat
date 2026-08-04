@@ -1,4 +1,4 @@
-name: Lint kit optimisation
+name: Capture kit optimisation lint
 on:
   push:
     branches: [feature/semantic-routing]
@@ -16,15 +16,19 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.1'
-      - name: PHP syntax
-        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
-      - name: Validate evaluation JSON
-        run: python3 -m json.tool tests/evals/core-conversations.json >/dev/null
-      - name: Remove one-time workflow
+      - name: Capture validation
+        run: |
+          mkdir -p docs
+          set +e
+          find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l > docs/lint-result.txt 2>&1
+          python3 -m json.tool tests/evals/core-conversations.json >/dev/null 2>> docs/lint-result.txt
+          echo "json_status=$?" >> docs/lint-result.txt
+          exit 0
+      - name: Commit result and remove workflow
         run: |
           rm .github/workflows/lint-kit-optimisation.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/lint-kit-optimisation.yml
-          git commit -m "chore: complete 0.11.1 syntax validation"
+          git add docs/lint-result.txt .github/workflows/lint-kit-optimisation.yml
+          git commit -m "chore: capture 0.11.1 validation result"
           git push origin feature/semantic-routing
