@@ -65,6 +65,14 @@ final class Orion_Admin_Controller {
         $this->field('OpenRouter model', 'openrouter_model', 'text', $settings['openrouter_model'], 'Use openrouter/free for testing or a fixed tool-capable model for production.');
         $this->field('Google Gemini API key', 'google_api_key', 'password', '', $google_status . '. Paste a new key only to replace it.');
         $this->field('Google Gemini model', 'google_model', 'text', $settings['google_model'], 'Use a model available to your Google AI Studio account with function calling support.');
+        $this->field('Routing model', 'routing_model', 'text', $settings['routing_model'], 'Blank inherits the active provider model. Use a fixed tool-capable model for reliable classification.');
+        $this->field('Product selection model', 'selection_model', 'text', $settings['selection_model'], 'Blank inherits the active provider model.');
+        $this->field('Answer model', 'answer_model', 'text', $settings['answer_model'], 'Blank inherits the active provider model.');
+        echo '<p><label><strong>Fallback provider</strong><br><select name="orion_ai_settings[fallback_provider]"><option value="none" ' . selected($settings['fallback_provider'], 'none', false) . '>Disabled</option><option value="openrouter" ' . selected($settings['fallback_provider'], 'openrouter', false) . '>OpenRouter</option><option value="google" ' . selected($settings['fallback_provider'], 'google', false) . '>Google Gemini</option></select></label></p>';
+        $this->field('Fallback model', 'fallback_model', 'text', $settings['fallback_model'], 'Leave blank to use the fallback provider default model.');
+        $this->field('Routing timeout (seconds)', 'routing_timeout', 'number', (string)$settings['routing_timeout']);
+        $this->field('Selection timeout (seconds)', 'selection_timeout', 'number', (string)$settings['selection_timeout']);
+        $this->field('Answer timeout (seconds)', 'answer_timeout', 'number', (string)$settings['answer_timeout']);
         echo '<p class="description">Save settings before testing a provider.</p>';
         $this->field('Chat title', 'title', 'text', $settings['title']);
         $this->field('Greeting', 'greeting', 'textarea', $settings['greeting']);
