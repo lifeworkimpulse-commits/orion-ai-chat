@@ -1,6 +1,6 @@
 # Catalogue audit
 
-Version 0.10.0 adds a read-only WooCommerce catalogue readiness audit.
+Version 0.11.2 provides a severity-aware, read-only WooCommerce catalogue audit.
 
 ```text
 wp orion-ai catalogue-audit
@@ -9,8 +9,21 @@ wp orion-ai catalogue-audit --format=json
 wp orion-ai catalogue-audit --limit=100
 ```
 
-The audit never changes products. It checks published products for missing or short descriptions, missing useful categories, images, SKUs and prices, duplicate SKUs, variable products without variations, variation prices/attributes, unknown application suitability, and floor-versus-wall/ceiling conflicts.
+The audit never changes products.
 
-The default output shows summary metrics and issue counts. `--details` prints up to 200 issue rows. JSON output contains all collected issue rows and can be saved to a file for analysis.
+## Severity
 
-A suitability warning is evidence that product data is insufficient for reliable AI matching; it is not a claim that the product itself is unsuitable. Product information should be confirmed against manufacturer documentation before editing catalogue data.
+- `critical`: prevents reliable sale or AI recommendation, such as missing descriptions/categories, broken variable products, missing prices, duplicate SKUs, or suitability conflicts.
+- `warning`: needs review but may not block sale, such as missing simple-product SKU, missing image, short description, duplicate title, variation SKU/attribute gaps, or unknown material suitability.
+- `info`: informational operational detail, currently including a variable parent without its own SKU when variations may carry unique SKUs.
+
+## Improvements
+
+- Variable parents without a SKU are distinguished from simple products without a SKU.
+- Variable products with no children use one critical `broken_variable_product` finding instead of separate missing-price and no-variation findings.
+- Variation SKUs are checked and included in duplicate-SKU detection.
+- Duplicate normalised product titles are reported with all matching IDs.
+- Suitability checks apply only to material-like products and exclude rollers, sleeves, frames, brushes, trays, masking tape, dust sheets, fixings, tools and PPE.
+- Summary output separates operational readiness from AI readiness.
+
+`operational_readiness_percent` excludes products with any critical finding. `ai_readiness_percent` excludes products with content, suitability, broken-variable or price findings relevant to reliable AI recommendations.
