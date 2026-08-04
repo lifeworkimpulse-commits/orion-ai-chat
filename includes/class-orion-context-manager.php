@@ -1,10 +1,5 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) { exit; }
-final class Orion_Context_Manager {
-    public function apply( array $state, array $classification ): array {
-        if(!empty($classification['is_new_topic']))$state=array();
-        $state=is_array($state)?$state:array();$state['active_intent']=$classification['intent']??'general';$state['active_topic']=$classification['topic']??'';$state['updated_at']=gmdate('c');
-        foreach(($classification['state_patch']??array())as$key=>$value){if($value===''||$value===null)continue;$state[$key]=$value;}
-        return array_slice($state,0,30,true);
-    }
+if(!defined('ABSPATH')){exit;}
+final class Orion_Context_Manager{
+ public function apply(array $state,array $classification):array{$state=is_array($state)?$state:array();$confidence=(float)($classification['confidence']??0);$unclassified='manager_follow_up'===($classification['intent']??'')&&($confidence<0.4||'unclassified'===($classification['topic']??''));if(!empty($classification['is_new_topic'])&&!$unclassified)$state=array();if(!$unclassified){$state['active_intent']=$classification['intent']??($state['active_intent']??'general');$state['active_topic']=$classification['topic']??($state['active_topic']??'');}foreach(($classification['state_patch']??array())as$key=>$value){if($value===''||$value===null)continue;$state[$key]=$value;}if(!empty($classification['needs_clarification'])&&!empty($classification['clarifying_questions']))$state['pending_clarifications']=array_values($classification['clarifying_questions']);elseif(!$unclassified)unset($state['pending_clarifications']);if(isset($state['dimension_length'],$state['dimension_width'],$state['dimension_unit'])&&in_array(strtolower((string)$state['dimension_unit']),array('m','meter','meters','metre','metres'),true))$state['area_m2']=round((float)$state['dimension_length']*(float)$state['dimension_width'],2);$state['updated_at']=gmdate('c');return array_slice($state,0,35,true);}
 }
