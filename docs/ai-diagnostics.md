@@ -5,8 +5,8 @@ Version 0.8 records a redacted trace for each customer request.
 ## WP-CLI
 
 ```text
-wp orion-ai diagnose --prompt="Can you get a pallet to M1?"
-wp orion-ai diagnose --provider=google --model=gemini-3.6-flash --prompt="My garage is six by four and I want a durable grey finish."
+wp orion-ai diagnose --message="Can you get a pallet to M1?"
+wp orion-ai diagnose --provider=google --model=gemini-3.6-flash --message="My garage is six by four and I want a durable grey finish."
 wp orion-ai traces list
 wp orion-ai traces list --format=json
 wp orion-ai traces show 12
