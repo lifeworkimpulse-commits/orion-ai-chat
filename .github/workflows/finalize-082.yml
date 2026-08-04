@@ -1,0 +1,43 @@
+name: Finalize 0.8.2
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - name: Patch clarification persistence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/class-orion-intent-classifier.php');s=p.read_text()
+          old="if((isset($out['state_patch']['dimension_length'])||isset($out['state_patch']['dimension_width']))&&empty($out['state_patch']['dimension_unit'])&&empty($out['state_patch']['area_m2']))unset($out['state_patch']['area_m2']);"
+          new="if((isset($out['state_patch']['dimension_length'])||isset($out['state_patch']['dimension_width']))&&empty($out['state_patch']['dimension_unit']))unset($out['state_patch']['area_m2']);"
+          if old not in s: raise SystemExit('dimension guard missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('includes/class-orion-chat-orchestrator.php');s=p.read_text()
+          old="$this->conversations->save_exchange($id,$question,$answer,$usage);"
+          new="$saved_answer=$answer;if($questions)$saved_answer.=\"\\n\".implode(\"\\n\",array_map(static fn($q)=>'- '.$q,$questions));$this->conversations->save_exchange($id,$question,$saved_answer,$usage);"
+          if old not in s: raise SystemExit('save exchange marker missing')
+          s=s.replace(old,new,1)
+          old2="'usage'=>$usage))));"
+          new2="'usage'=>$usage,'clarifying_questions'=>$questions))));"
+          if old2 not in s: raise SystemExit('trace response marker missing')
+          p.write_text(s.replace(old2,new2,1))
+          PY
+      - name: Commit
+        run: |
+          rm .github/workflows/finalize-082.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-intent-classifier.php includes/class-orion-chat-orchestrator.php .github/workflows/finalize-082.yml
+          git commit -m "fix: persist pending clarification questions"
+          git push origin feature/semantic-routing
