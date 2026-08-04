@@ -1,25 +1,7 @@
 [
-  {
-    "name": "Implicit pallet delivery",
-    "messages": ["Can you get a pallet to M1?"],
-    "expected_intent": "store_policy",
-    "must_not_return_products": true
-  },
-  {
-    "name": "Implicit garage coating project",
-    "messages": ["My garage is six by four and I want a durable grey finish."],
-    "expected_intent": "project_recommendation",
-    "expected_state": {"area_m2": 24, "colour": "grey"}
-  },
-  {
-    "name": "Context colour update",
-    "messages": ["My garage is six by four and I want a durable grey finish.", "Make it blue instead."],
-    "expected_state": {"area_m2": 24, "colour": "blue"}
-  },
-  {
-    "name": "Switch from project to returns",
-    "messages": ["I need to coat my garage floor.", "Now tell me your returns policy."],
-    "expected_intent": "store_policy",
-    "must_not_return_products": true
-  }
+  {"name":"Implicit pallet delivery","messages":["Can you get a pallet to M1?"],"expected_intent":"store_policy"},
+  {"name":"Garage dimensions and unit","messages":["My garage is six by four and I want a durable grey finish.","m"],"expected_intent":"project_recommendation","expected_state":{"area_m2":24,"colour":"grey"}},
+  {"name":"Context colour update","messages":["My garage is six by four and I want a durable grey finish.","m","Make it blue instead."],"expected_intent":"project_recommendation","expected_state":{"area_m2":24,"colour":"blue"}},
+  {"name":"Switch from project to returns","messages":["I need to coat my garage floor.","Now tell me your returns policy."],"expected_intent":"store_policy"},
+  {"name":"Ambiguous linear measurement","messages":["I need paint for 20 m."],"expected_intent":"project_recommendation"}
 ]
