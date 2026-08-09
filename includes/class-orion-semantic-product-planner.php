@@ -30,7 +30,7 @@ final class Orion_Semantic_Product_Planner{
    if(isset($selected_index[$id])){if(!$this->is_bundle($product))continue;$index=$selected_index[$id];$this->add_role($selected[$index],$role);$reason=sanitize_text_field((string)($choice['reason']??''));if($reason!=='')$selected[$index]['recommendation_reason'].=' '.$reason;continue;}
    $product=$this->decorate_selection($product,$role);$product['recommendation_reason']=sanitize_text_field((string)($choice['reason']??''));$selected_index[$id]=count($selected);$selected[]=$product;
   }
-  [$selected,$rejections]=$this->validate_systems($selected,$state);usort($selected,fn($a,$b)=>$this->priority($a)<=>$this->priority($b));$selected_before_limit=count($selected);$displayed=array_slice($selected,0,max(1,(int)$settings['max_products']);
+  [$selected,$rejections]=$this->validate_systems($selected,$state);usort($selected,fn($a,$b)=>$this->priority($a)<=>$this->priority($b));$selected_before_limit=count($selected);$displayed=array_slice($selected,0,max(1,(int)$settings['max_products']));
   [$displayed,$display_rejections]=$this->validate_systems($displayed,$state);$rejections=array_values(array_merge($rejections,$display_rejections));
   $displayed_roles=array();foreach($displayed as$product)foreach(($product['logical_roles']??array())as$role)if($role!=='')$displayed_roles[]=$role;
   $missing=array();foreach($groups as$group)if(empty($group['conditional'])&&!in_array($group['role'],$displayed_roles,true))$missing[]=$group['role'];
