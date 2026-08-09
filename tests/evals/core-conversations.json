@@ -43,5 +43,14 @@
     "expected_state": {"surface": "ceiling", "area_m2": 10, "colour": "white"},
     "expected_roles": ["primary_coating", "roller", "brush", "tray"],
     "expected_optional_roles": ["roller", "brush", "tray"]
+  },
+  {
+    "name": "Garage floor canonical kit roles",
+    "messages": ["I need a durable grey coating for a 24 square metre concrete garage floor. Find everything needed."],
+    "expected_intent": "project_recommendation",
+    "expected_state": {"surface": "concrete", "area_m2": 24, "colour": "grey"},
+    "expected_roles": ["primary_coating", "cleaner", "roller", "brush", "tray", "masking_tape"],
+    "expected_optional_roles": ["cleaner", "roller", "brush", "tray", "masking_tape"],
+    "unexpected_roles": ["dust_sheet"]
   }
 ]
