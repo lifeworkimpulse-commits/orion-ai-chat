@@ -1,0 +1,84 @@
+name: Finalize selection reliability 0.11.5
+on:
+  push:
+    branches: [feature/semantic-routing]
+permissions:
+  contents: write
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/semantic-routing
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+      - name: Patch canonical routing and structured selection
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def once(text, old, new, label):
+              if old not in text: raise SystemExit(label+' marker missing')
+              return text.replace(old,new,1)
+
+          p=Path('includes/class-orion-intent-classifier.php');s=p.read_text()
+          roles="array('primary_coating','primary_product','primer','cleaner','filler','roller','brush','tray','masking_tape','dust_sheet','sandpaper','scraper','fixings','trim','tools','protection')"
+          s=once(s,"'role'=>array('type'=>'string')","'role'=>array('type'=>'string','enum'=>"+roles+")",'role schema')
+          s=once(s,"$role=sanitize_key((string)($item['role']??''));","$role=$this->canonical_role((string)($item['role']??''));",'classifier role')
+          tail="$out['search_plan'][]=array('role'=>$role,'query'=>$query,'required'=>!empty($item['required'])&&!in_array($role,$optional_roles,true),'requirements'=>$clean);}return$out;}"
+          replacement="$out['search_plan'][]=array('role'=>$role,'query'=>$query,'required'=>!empty($item['required'])&&!in_array($role,$optional_roles,true),'requirements'=>$clean);}$state_text=strtolower(implode(' ',array_map('strval',array_filter($out['state_patch'],'is_scalar'))));if(preg_match('/\\b(floor|garage)\\b/',$state_text))$out['search_plan']=array_values(array_filter($out['search_plan'],static fn($item)=>($item['role']??'')!=='dust_sheet'));if($out['intent']==='product_search'&&(!empty($out['state_patch']['project_type'])||isset($out['state_patch']['area_m2']))&&count($out['search_plan'])>1)$out['intent']='project_recommendation';return$out;}"
+          s=once(s,tail,replacement,'classifier tail')
+          marker=' private function decode(string $text):?array{'
+          method=" private function canonical_role(string $role):string{$key=sanitize_key($role);$compact=preg_replace('/[^a-z0-9]/','',$key);$map=array('primarycoating'=>'primary_coating','primaryproduct'=>'primary_product','mainpaint'=>'primary_coating','maskingtape'=>'masking_tape','masking'=>'masking_tape','dustsheet'=>'dust_sheet','rollerframe'=>'roller','rollersleeve'=>'roller','sleeve'=>'roller','frame'=>'roller');return$map[$compact]??$key;}\n"
+          if marker not in s: raise SystemExit('classifier decode marker missing')
+          s=s.replace(marker,method+marker,1);p.write_text(s)
+
+          p=Path('includes/class-orion-semantic-product-planner.php');s=p.read_text()
+          s=once(s,"mb_substr((string)($product['description']??$product['short_description']),0,450)","mb_substr((string)($product['description']??$product['short_description']),0,380)",'description limit')
+          s=once(s,"$limit=$role==='roller'?10:($required?8:6);","$limit=$role==='roller'?8:($required?8:6);",'roller limit')
+          s=once(s,"$role=sanitize_key((string)($item['role']??''));","$role=$this->canonical_role((string)($item['role']??''));",'planner role')
+          old='Return JSON only: {"selections":[{"role":"...","product_id":123,"reason":"..."}],"missing_roles":["..."]}.'
+          s=once(s,old,'Call select_products exactly once with selections and missing_roles.','selection prompt')
+          old="$result=$provider->chat(array(array('role'=>'system','content'=>$prompt),array('role'=>'user','content'=>$payload_json)));$data=!empty($result['ok'])?$this->decode((string)($result['message']['content']??'')):null;$selected=array();$selected_index=array();"
+          new="$selection_roles=array_values(array_keys($candidate_ids));$tool=array('type'=>'function','function'=>array('name'=>'select_products','description'=>'Select only verified candidate IDs and report unresolved roles.','parameters'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('selections'=>array('type'=>'array','maxItems'=>20,'items'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('role'=>array('type'=>'string','enum'=>$selection_roles),'product_id'=>array('type'=>'integer'),'reason'=>array('type'=>'string')),'required'=>array('role','product_id','reason'))),'missing_roles'=>array('type'=>'array','items'=>array('type'=>'string','enum'=>$selection_roles))),'required'=>array('selections','missing_roles'))));$result=$provider->chat(array(array('role'=>'system','content'=>$prompt),array('role'=>'user','content'=>$payload_json)),array($tool));$data=null;$calls=$result['message']['tool_calls']??array();if($calls)$data=json_decode((string)($calls[0]['function']['arguments']??'{}'),true);if(!is_array($data)&&!empty($result['ok']))$data=$this->decode((string)($result['message']['content']??''));$selected=array();$selected_index=array();"
+          s=once(s,old,new,'structured selector')
+          old="array('status'=>'invalid_selector_output','catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json))"
+          new="array('status'=>'invalid_selector_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content']??'')),0,500),'usage'=>$result['usage']??array(),'attempts'=>$result['attempts']??array(),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json))"
+          s=once(s,old,new,'invalid selector diagnostic')
+          start=s.index(' private function candidate_allowed(');end=s.index(' private function roller_rank(',start)
+          candidate=""" private function candidate_allowed(array $product,string $role,array $state):bool{$identity=$this->product_identity($product);if($role==='primary_coating'){if(!preg_match('/\\b(paint|coating|epoxy|varnish|stain)\\b/',$identity))return false;if(preg_match('/\\b(brush|roller|sleeve|frame|tray|plasterboard|board|tile|carpet|adhesive|filler)\\b/',$identity))return false;return true;}if($role==='cleaner')return(bool)(preg_match('/\\b(cleaner|degreaser|sugar soap)\\b/',$identity)&&!preg_match('/\\b(vacuum|machine)\\b/',$identity));if($role==='brush')return(bool)(preg_match('/\\b(paint brush|decorating brush|masonry brush|cutting.?in brush)\\b/',$identity)&&!preg_match('/\\b(storage|vapour|dustpan)\\b/',$identity));if($role==='tray')return(bool)preg_match('/\\b(paint tray|roller tray|scuttle|painting pack|roller set)\\b/',$identity);if($role==='masking_tape')return(bool)preg_match('/\\b(masking tape|painter[’\\x27]?s tape|decorators? tape)\\b/',$identity);if($role==='dust_sheet')return(bool)preg_match('/\\b(dust sheet|protective sheet|polythene sheet)\\b/',$identity);if($role!=='roller')return true;$meta=$this->roller_component($product);if($meta['kind']==='unknown')return false;$text=$this->product_text($product);$area=(float)($state['area_m2']??0);if($area>=10&&($meta['width']>0&&$meta['width']<=4.5||preg_match('/\\b(mini|radiator)\\b/',$text)))return false;if($this->is_floor_project($state)&&preg_match('/\\b(gloss|emulsion|wall|ceiling|radiator|mini)\\b/',$text)&&!preg_match('/\\b(floor|garage|epoxy|floor coating|heavy duty coating)\\b/',$text))return false;return true;}\n"""
+          s=s[:start]+candidate+s[end:]
+          marker=' private function product_text(array $product):string{'
+          helpers=" private function canonical_role(string $role):string{$key=sanitize_key($role);$compact=preg_replace('/[^a-z0-9]/','',$key);$map=array('primarycoating'=>'primary_coating','primaryproduct'=>'primary_product','mainpaint'=>'primary_coating','maskingtape'=>'masking_tape','masking'=>'masking_tape','dustsheet'=>'dust_sheet','rollerframe'=>'roller','rollersleeve'=>'roller','sleeve'=>'roller','frame'=>'roller');return$map[$compact]??$key;}\n private function product_identity(array $product):string{return strtolower(html_entity_decode((string)($product['name']??'').' '.implode(' ',(array)($product['categories']??array())),ENT_QUOTES|ENT_HTML5,'UTF-8'));}\n"
+          if marker not in s: raise SystemExit('planner product text marker missing')
+          s=s.replace(marker,helpers+marker,1);p.write_text(s)
+
+          p=Path('includes/class-orion-evaluation-service.php');s=p.read_text()
+          old="$checks[]=$optional;}$diagnostic="
+          new="$checks[]=$optional;}foreach(($case['unexpected_roles']??array())as$role)$checks[]=!in_array($role,$actual_roles,true);$diagnostic="
+          s=once(s,old,new,'unexpected roles evaluation');p.write_text(s)
+          PY
+      - name: PHP syntax
+        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
+      - name: Role and filter smoke tests
+        run: |
+          php -r '
+          define("ABSPATH", __DIR__);
+          function sanitize_text_field($v){return trim((string)$v);} function sanitize_textarea_field($v){return trim((string)$v);} function sanitize_key($v){return strtolower(preg_replace("/[^a-z0-9_-]/","",(string)$v));} function absint($v){return abs((int)$v);} function wp_json_encode($v){return json_encode($v);} function wp_strip_all_tags($v){return strip_tags((string)$v);}
+          require "includes/class-orion-intent-classifier.php";require "includes/class-orion-semantic-product-planner.php";
+          $router=new Orion_Intent_Classifier();$rr=new ReflectionClass($router);$fallback=$rr->getMethod("fallback");$fallback->setAccessible(true);$validate=$rr->getMethod("validate");$validate->setAccessible(true);$input=["intent"=>"product_search","topic"=>"garage","confidence"=>1,"state_patch"=>["project_type"=>"garage floor coating","area_m2"=>24],"search_plan"=>[["role"=>"primarycoating","query"=>"floor paint","required"=>true],["role"=>"maskingtape","query"=>"masking tape","required"=>false],["role"=>"dustsheet","query"=>"dust sheet","required"=>false]]];$out=$validate->invoke($router,$input,$fallback->invoke($router));$roles=array_column($out["search_plan"],"role");if($out["intent"]!=="project_recommendation"||!in_array("primary_coating",$roles,true)||!in_array("masking_tape",$roles,true)||in_array("dust_sheet",$roles,true)){fwrite(STDERR,"Canonical routing failed\n");exit(1);}
+          $planner=(new ReflectionClass("Orion_Semantic_Product_Planner"))->newInstanceWithoutConstructor();$pr=new ReflectionClass($planner);$allowed=$pr->getMethod("candidate_allowed");$allowed->setAccessible(true);$state=["project_type"=>"garage floor coating","area_m2"=>24];if(!$allowed->invoke($planner,["name"=>"Heavy Duty Floor Paint Grey 5L","categories"=>["Paint"]],"primary_coating",$state))exit(1);if($allowed->invoke($planner,["name"=>"Wall and Ceiling Paint Brushes","categories"=>["Painting"]],"primary_coating",$state))exit(1);if(!$allowed->invoke($planner,["name"=>"Universal Degreaser and Cleaner","categories"=>["Cleaning Chemicals"]],"cleaner",$state))exit(1);if($allowed->invoke($planner,["name"=>"Dry Vacuum Cleaner","categories"=>["Vacuum Cleaners"]],"cleaner",$state))exit(1);echo "Canonical roles and filters OK\n";
+          '
+          grep -q "name'=>'select_products'" includes/class-orion-semantic-product-planner.php
+          python3 -m json.tool tests/evals/core-conversations.json >/dev/null
+      - name: Commit validated release
+        run: |
+          rm .github/workflows/finalize-selection-reliability-0115.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add includes/class-orion-intent-classifier.php includes/class-orion-semantic-product-planner.php includes/class-orion-evaluation-service.php .github/workflows/finalize-selection-reliability-0115.yml
+          git commit -m "feat: complete structured selection reliability 0.11.5"
+          git push origin feature/semantic-routing
