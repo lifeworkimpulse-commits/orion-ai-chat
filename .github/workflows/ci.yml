@@ -4,10 +4,15 @@ on:
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  quality:
+  syntax:
+    name: PHP syntax (${{ matrix.php }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         php: ['8.0','8.1','8.2','8.3']
     steps:
@@ -16,22 +21,43 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
+      - run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+
+  unit:
+    name: PHPUnit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
           tools: composer:v2
       - uses: actions/cache@v4
         with:
           path: vendor
-          key: composer-${{ runner.os }}-${{ matrix.php }}-${{ hashFiles('composer.lock','composer.json') }}
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
-      - name: Validate Composer metadata
-        run: composer validate --no-check-publish
-      - name: Check PHP syntax
-        run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
-      - name: Run unit tests
-        run: composer test
-      - name: Static analysis
-        run: composer analyse
-      - name: Validate evaluation suite
-        run: python3 -m json.tool tests/evals/core-conversations.json >/dev/null
-      - name: Check JavaScript syntax
-        run: node --check assets/widget.js
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock','composer.json') }}
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer validate --no-check-publish
+      - run: composer test
+
+  static-analysis:
+    name: PHPStan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer analyse
+
+  assets:
+    name: Assets and evaluation schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m json.tool tests/evals/core-conversations.json >/dev/null
+      - run: node --check assets/widget.js
