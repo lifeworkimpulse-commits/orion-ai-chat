@@ -66,7 +66,7 @@ final class Orion_Intent_Classifier {
         $text = strtolower(trim($message)); $patch = array();
         if (preg_match('/^(m|metre|metres|meter|meters)(\b|[ ,])/i', $text)) { $patch['dimension_unit'] = 'm'; }
         elseif (preg_match('/^(ft|foot|feet)(\b|[ ,])/i', $text)) { $patch['dimension_unit'] = 'ft'; }
-        foreach (array('concrete','painted concrete','epoxy','wood','plaster','masonry','brick','metal') as $surface) {
+        foreach (array('painted concrete','concrete','epoxy','wood','plaster','masonry','brick','metal') as $surface) {
             if (str_contains($text, $surface)) { $patch['surface'] = $surface; break; }
         }
         if (!$patch) { return null; }
@@ -102,22 +102,61 @@ final class Orion_Intent_Classifier {
         $allowed_state = array('project_type','surface','area_m2','environment','traffic','colour','finish','dimensions','dimension_length','dimension_width','dimension_unit','notes');
         $patch = is_array($data['state_patch'] ?? null) ? $data['state_patch'] : array();
         foreach ($allowed_state as $key) {
-            if (array_key_exists($key, $patch) && $patch[$key] !== '' && $patch[$key] !== null) { $out['state_patch'][$key] = is_numeric($patch[$key]) ? (float)$patch[$key] : sanitize_text_field((string)$patch[$key]); }
+            if (!array_key_exists($key, $patch) || $patch[$key] === '' || $patch[$key] === null) { continue; }
+            $value = is_numeric($patch[$key]) ? (float)$patch[$key] : sanitize_text_field((string)$patch[$key]);
+            if ('surface' === $key && is_string($value)) { $value = $this->canonical_surface($value); }
+            $out['state_patch'][$key] = $value;
         }
         if ((isset($out['state_patch']['dimension_length']) || isset($out['state_patch']['dimension_width'])) && empty($out['state_patch']['dimension_unit'])) { unset($out['state_patch']['area_m2']); }
         $plan = is_array($data['search_plan'] ?? null) ? $data['search_plan'] : array();
         foreach (array_slice($plan,0,10) as $item) {
             if (!is_array($item)) { continue; }
-            $role = Orion_Role_Registry::canonical((string)($item['role'] ?? '')); $query = sanitize_text_field((string)($item['query'] ?? ''));
+            $query = sanitize_text_field((string)($item['query'] ?? ''));
+            $role = Orion_Role_Registry::canonical_for_query((string)($item['role'] ?? ''), $query);
             if (!Orion_Role_Registry::supported($role) || !$query) { continue; }
             $requirements = is_array($item['requirements'] ?? null) ? $item['requirements'] : array(); $clean = array();
             foreach (array_slice($requirements,0,10,true) as $key => $value) { $clean[sanitize_key((string)$key)] = sanitize_text_field(is_scalar($value) ? (string)$value : wp_json_encode($value)); }
             $out['search_plan'][] = array('role'=>$role,'query'=>$query,'required'=>!empty($item['required']) && !Orion_Role_Registry::optional($role),'requirements'=>$clean);
         }
-        $combined_state = array_merge($out['state_patch'], array('project_type'=>$out['topic']));
-        if (Orion_Routing_Rules::is_floor_project($combined_state)) { $out['search_plan'] = array_values(array_filter($out['search_plan'], static fn($item)=>($item['role'] ?? '') !== 'dust_sheet')); }
+        $combined_state = array_merge($out['state_patch'], array('project_type'=>$out['state_patch']['project_type'] ?? $out['topic']));
+        $out['search_plan'] = $this->normalise_plan($out['search_plan'], $combined_state);
         if ($out['intent'] === 'product_search' && (!empty($out['state_patch']['project_type']) || isset($out['state_patch']['area_m2'])) && count($out['search_plan']) > 1) { $out['intent'] = 'project_recommendation'; }
         return $out;
+    }
+
+    private function normalise_plan(array $plan, array $state): array {
+        $out = array(); $seen = array(); $floor = Orion_Routing_Rules::is_floor_project($state);
+        foreach ($plan as $item) {
+            $role = (string)($item['role'] ?? '');
+            if ('dust_sheet' === $role && $floor) { continue; }
+            if (!Orion_Role_Registry::supported($role) || isset($seen[$role])) { continue; }
+            $out[] = $item; $seen[$role] = true;
+        }
+        $complete = Orion_Routing_Rules::wants_complete_kit($state) || count($out) >= 6;
+        if ($complete && (isset($seen['primary_coating']) || isset($seen['primary_product']))) {
+            $surface = sanitize_text_field((string)($state['surface'] ?? 'painted surface'));
+            $core = array(
+                'roller'=>'complete paint roller system with frame and sleeve for '.$surface,
+                'tray'=>'paint roller tray compatible with the selected roller',
+                'brush'=>'paint brush for cutting in '.$surface,
+                'masking_tape'=>'decorators masking tape for protecting edges',
+            );
+            if ($floor) { $core['cleaner'] = 'floor cleaner or degreaser for coating preparation'; }
+            else { $core['dust_sheet'] = 'protective dust sheet for painting'; }
+            foreach ($core as $role => $query) {
+                if (!isset($seen[$role])) { $out[] = array('role'=>$role,'query'=>$query,'required'=>false,'requirements'=>array('surface'=>$surface)); $seen[$role] = true; }
+            }
+        }
+        usort($out,static fn($first,$second)=>Orion_Role_Registry::priority((string)($first['role'] ?? ''))<=>Orion_Role_Registry::priority((string)($second['role'] ?? '')));
+        return array_slice($out,0,10);
+    }
+
+    private function canonical_surface(string $surface): string {
+        $surface = strtolower(trim($surface));
+        if (str_contains($surface,'painted concrete')) { return 'painted concrete'; }
+        if (str_contains($surface,'concrete')) { return 'concrete'; }
+        foreach (array('ceiling','wall','plaster','masonry','brick','wood','timber','metal','tile') as $known) { if (str_contains($surface,$known)) { return $known; } }
+        return sanitize_text_field($surface);
     }
 
     private function fallback(): array { return array('intent'=>'manager_follow_up','topic'=>'unclassified','is_new_topic'=>false,'confidence'=>0.0,'needs_clarification'=>false,'clarifying_questions'=>array(),'policy_query'=>'','state_patch'=>array(),'search_plan'=>array(),'_diagnostic'=>array('status'=>'fallback')); }
