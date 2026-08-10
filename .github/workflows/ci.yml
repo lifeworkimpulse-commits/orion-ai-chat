@@ -42,7 +42,7 @@ jobs:
       - run: composer test
 
   static-analysis:
-    name: PHPStan
+    name: PHPStan stabilization core
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +52,7 @@ jobs:
           coverage: none
           tools: composer:v2
       - run: composer install --no-interaction --prefer-dist
-      - run: composer analyse
+      - run: vendor/bin/phpstan analyse --configuration=phpstan-stabilization.neon
 
   assets:
     name: Assets and evaluation schema
