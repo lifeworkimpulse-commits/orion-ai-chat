@@ -1,65 +1,171 @@
 <?php
-if(!defined('ABSPATH')){exit;}
+if (!defined('ABSPATH')) { exit; }
 
-final class Orion_Semantic_Product_Planner{
- private Orion_Product_Search $products;
- public function __construct(Orion_Product_Search $products){$this->products=$products;}
+final class Orion_Semantic_Product_Planner {
+    private Orion_Product_Search $products;
+    private Orion_Product_Facts $facts;
+    private Orion_Kit_Validator $validator;
 
- public function recommend(array $classification,array $state,array $settings):array{
-  $plan=$this->normalise_plan($classification['search_plan']??array(),$state);
-  if(!$plan)return array('products'=>array(),'missing_roles'=>array(),'conditional_roles'=>array(),'plan'=>array(),'diagnostic'=>array('status'=>'no_search_plan'));
-  $groups=array();$candidate_ids=array();$catalogue=array();$roles_payload=array();$conditional_roles=array();$plan_count=count($plan);
-  foreach($plan as$item){
-   $role=$this->canonical_role((string)($item['role']??''));if($role==='')continue;$required=!empty($item['required']);$requirements=is_array($item['requirements']??null)?$item['requirements']:array();
-   if($this->defer_conditional($role,$state,$plan_count)){$conditional_roles[]=$role;$groups[]=array('role'=>$role,'required'=>false,'conditional'=>true,'requirements'=>$requirements,'candidates'=>array());continue;}
-   $limit=$role==='roller'?8:($required?8:6);$found=$this->search_candidates($item,$role,$state,$limit);$ids=array();$group_candidates=array();
-   foreach($found as$product){
-    $id=(int)($product['id']??0);if(!$id)continue;$candidate_ids[$role][$id]=true;$ids[]=$id;
-    if(!isset($catalogue[$id]))$catalogue[$id]=array('id'=>$id,'name'=>$product['name'],'type'=>$product['type'],'price'=>$product['price_text'],'categories'=>$product['categories'],'attributes'=>$product['attributes'],'description'=>mb_substr((string)($product['description']??$product['short_description']),0,380),'stock'=>$product['stock_status'],'selection_meta'=>$this->selection_meta($product),'retrieval'=>$product['retrieval']??array());
-    $group_candidates[]=$catalogue[$id];
-   }
-   $groups[]=array('role'=>$role,'required'=>$required,'conditional'=>false,'requirements'=>$requirements,'candidates'=>$group_candidates);
-   $roles_payload[]=array('role'=>$role,'required'=>$required,'requirements'=>$requirements,'candidate_ids'=>$ids);
-  }
-  if(!$candidate_ids){$missing=array_values(array_filter(array_column($groups,'role'),static fn($role)=>!in_array($role,$conditional_roles,true)));return array('products'=>array(),'missing_roles'=>$missing,'conditional_roles'=>array_values(array_unique($conditional_roles)),'plan'=>$groups,'diagnostic'=>array('status'=>'no_relevant_candidates','catalogue_products'=>0,'role_candidates'=>0));}
-  $payload=array('state'=>$state,'products'=>array_values($catalogue),'roles'=>$roles_payload);$payload_json=wp_json_encode($payload);$provider=Orion_AI_Provider_Factory::create($settings,'selection');
-  $prompt='Read each unique product once from products, then match its ID to zero or more supplied roles. Decide semantically from title, description, categories and attributes rather than exact query words. Select only candidate_ids allowed for that role and reject unsupported suitability. For roller, select either one product whose text explicitly includes both a frame and at least one sleeve, or select exactly one frame plus one sleeve with the same stated width. Multiple selections for roller are allowed. Never select a frame alone, a sleeve alone, a mini/radiator roller for the main application on a large area, or a wall/gloss-only roller for a floor unless floor-coating suitability is explicit. For tray, select a stated width at least as large as the selected roller. Reuse one product ID across different roles only when its supplied text explicitly identifies a set, kit or bundle whose stated contents satisfy every assigned role. Prefer a practical core kit over conditional preparation products. Call select_products exactly once with selections and missing_roles.';
-  $selection_roles=array_values(array_keys($candidate_ids));$tool=array('type'=>'function','function'=>array('name'=>'select_products','description'=>'Select only verified candidate IDs and report unresolved roles.','parameters'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('selections'=>array('type'=>'array','maxItems'=>20,'items'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('role'=>array('type'=>'string','enum'=>$selection_roles),'product_id'=>array('type'=>'integer'),'reason'=>array('type'=>'string')),'required'=>array('role','product_id','reason'))),'missing_roles'=>array('type'=>'array','items'=>array('type'=>'string','enum'=>$selection_roles))),'required'=>array('selections','missing_roles'))));$result=$provider->chat(array(array('role'=>'system','content'=>$prompt),array('role'=>'user','content'=>$payload_json)),array($tool));$data=null;$calls=$result['message']['tool_calls']??array();if($calls)$data=json_decode((string)($calls[0]['function']['arguments']??'{}'),true);if(!is_array($data)&&!empty($result['ok']))$data=$this->decode((string)($result['message']['content']??''));$selected=array();$selected_index=array();
-  if(is_array($data))foreach(($data['selections']??array())as$choice){
-   $role=sanitize_key((string)($choice['role']??''));$id=absint($choice['product_id']??0);if(!$role||!$id||empty($candidate_ids[$role][$id]))continue;$product=$this->products->get_product($id);if(!$product||empty($product['in_stock']))continue;
-   if(isset($selected_index[$id])){if(!$this->is_bundle($product))continue;$index=$selected_index[$id];$this->add_role($selected[$index],$role);$reason=sanitize_text_field((string)($choice['reason']??''));if($reason!=='')$selected[$index]['recommendation_reason'].=' '.$reason;continue;}
-   $product=$this->decorate_selection($product,$role);$product['recommendation_reason']=sanitize_text_field((string)($choice['reason']??''));$selected_index[$id]=count($selected);$selected[]=$product;
-  }
-  [$selected,$rejections]=$this->validate_systems($selected,$state);usort($selected,fn($a,$b)=>$this->priority($a)<=>$this->priority($b));$selected_before_limit=count($selected);$displayed=array_slice($selected,0,max(1,(int)$settings['max_products']));
-  [$displayed,$display_rejections]=$this->validate_systems($displayed,$state);$rejections=array_values(array_merge($rejections,$display_rejections));
-  $displayed_roles=array();foreach($displayed as$product)foreach(($product['logical_roles']??array())as$role)if($role!=='')$displayed_roles[]=$role;
-  $missing=array();foreach($groups as$group)if(empty($group['conditional'])&&!in_array($group['role'],$displayed_roles,true))$missing[]=$group['role'];
-  $diagnostic=!empty($result['ok'])?(is_array($data)?array('status'=>'ok','usage'=>$result['usage']??array(),'attempts'=>$result['attempts']??array(),'fallback_used'=>!empty($result['fallback_used']),'catalogue_products'=>count($catalogue),'role_candidates'=>array_sum(array_map('count',array_column($roles_payload,'candidate_ids'))),'payload_chars'=>strlen((string)$payload_json),'selected_before_card_limit'=>$selected_before_limit,'displayed_products'=>count($displayed),'roller_system_complete'=>in_array('roller',$displayed_roles,true),'selection_rejections'=>$rejections):array('status'=>'invalid_selector_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content']??'')),0,500),'usage'=>$result['usage']??array(),'attempts'=>$result['attempts']??array(),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json))):array('status'=>'selector_provider_error','error'=>sanitize_text_field((string)($result['error']??'')),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json));
-  return array('products'=>$displayed,'missing_roles'=>array_values(array_unique($missing)),'conditional_roles'=>array_values(array_unique($conditional_roles)),'plan'=>$groups,'diagnostic'=>$diagnostic);
- }
+    public function __construct(Orion_Product_Search $products, ?Orion_Product_Facts $facts = null, ?Orion_Kit_Validator $validator = null) {
+        $this->products = $products;
+        $this->facts = $facts ?? new Orion_Product_Facts();
+        $this->validator = $validator ?? new Orion_Kit_Validator($this->facts);
+    }
 
- private function normalise_plan(array $plan,array $state):array{$out=array();$seen=array();foreach($plan as$item){if(!is_array($item))continue;$role=$this->canonical_role((string)($item['role']??''));if(!$role||isset($seen[$role]))continue;if($role==='dust_sheet'&&$this->is_floor_project($state))continue;$item['role']=$role;$out[]=$item;$seen[$role]=true;}$complete=$this->wants_complete_kit($state)||count($out)>=6;if($complete&&(isset($seen['primary_coating'])||isset($seen['primary_product']))){$surface=sanitize_text_field((string)($state['surface']??'painted surface'));$core=array('roller'=>'complete paint roller system with frame and sleeve for '.$surface,'tray'=>'paint roller tray compatible with the selected roller','brush'=>'paint brush for cutting in '.$surface,'masking_tape'=>'decorators masking tape for protecting edges');if($this->is_floor_project($state))$core['cleaner']='floor cleaner or degreaser for coating preparation';else$core['dust_sheet']='protective dust sheet for painting';foreach($core as$role=>$query)if(!isset($seen[$role])){$out[]=array('role'=>$role,'query'=>$query,'required'=>false,'requirements'=>array('surface'=>$surface));$seen[$role]=true;}}usort($out,fn($a,$b)=>$this->plan_role_priority((string)($a['role']??''))<=>$this->plan_role_priority((string)($b['role']??'')));return array_slice($out,0,10);}
- private function wants_complete_kit(array $state):bool{$text=strtolower((string)($state['notes']??'').' '.(string)($state['project_type']??''));return(bool)preg_match('/\b(everything needed|complete (?:kit|materials|product kit)|all materials|all supplies|including[^.]{0,80}supplies)\b/',$text);}
- private function plan_role_priority(string $role):int{$map=array('primary_coating'=>10,'primary_product'=>10,'roller'=>20,'tray'=>30,'brush'=>40,'cleaner'=>45,'masking_tape'=>50,'dust_sheet'=>60,'primer'=>70,'filler'=>72,'sandpaper'=>73,'scraper'=>74);return$map[$role]??80;}
- private function search_candidates(array $item,string $role,array $state,int $limit):array{$query=sanitize_text_field((string)($item['query']??''));$requirements=is_array($item['requirements']??null)?$item['requirements']:array();$queries=array($query);if($role==='roller'){$surface=sanitize_text_field((string)($state['surface']??''));$queries[]='complete paint roller set with frame and sleeve '.$surface;$queries[]='paint roller frame '.$surface;$queries[]='paint roller sleeve '.$surface;}$found=array();foreach(array_unique(array_filter($queries))as$q)foreach($this->products->search(array('query'=>$q,'role'=>$role,'requirements'=>$requirements,'in_stock'=>true,'limit'=>$limit))as$product){$id=(int)($product['id']??0);if($id&&!isset($found[$id])&&$this->candidate_allowed($product,$role,$state))$found[$id]=$product;}if($role==='roller')uasort($found,fn($a,$b)=>$this->roller_rank($b)<=>$this->roller_rank($a));return array_slice(array_values($found),0,$limit);}
- private function candidate_allowed(array $product,string $role,array $state):bool{$identity=$this->product_identity($product);if($role==='primary_coating'){if(!preg_match('/\b(paint|coating|epoxy|varnish|stain)\b/',$identity))return false;if(preg_match('/\b(brush(?:es)?|roller|sleeve|frame|tray|plasterboard|board|tile|carpet|adhesive|filler)\b/',$identity))return false;return true;}if($role==='cleaner')return(bool)(preg_match('/\b(cleaner|degreaser|sugar soap)\b/',$identity)&&!preg_match('/\b(vacuum|machine)\b/',$identity));if($role==='brush')return(bool)(preg_match('/\b(paint brush|decorating brush|masonry brush|cutting.?in brush)\b/',$identity)&&!preg_match('/\b(storage|vapour|dustpan)\b/',$identity));if($role==='tray')return(bool)preg_match('/\b(paint tray|roller tray|scuttle|painting pack|roller set)\b/',$identity);if($role==='masking_tape')return(bool)preg_match('/\b(masking tape|painter[’\x27]?s tape|decorators? tape)\b/',$identity);if($role==='dust_sheet')return(bool)preg_match('/\b(dust sheet|protective sheet|polythene sheet)\b/',$identity);if($role!=='roller')return true;$meta=$this->roller_component($product);if($meta['kind']==='unknown')return false;$text=$this->product_text($product);$area=(float)($state['area_m2']??0);if($area>=10&&($meta['width']>0&&$meta['width']<=4.5||preg_match('/\b(mini|radiator)\b/',$text)))return false;if($this->is_floor_project($state)&&preg_match('/\b(gloss|emulsion|wall|ceiling|radiator|mini)\b/',$text)&&!preg_match('/\b(floor|garage|epoxy|floor coating|heavy duty coating)\b/',$text))return false;return true;}
- private function roller_rank(array $product):int{$meta=$this->roller_component($product);$base=array('complete'=>300,'frame'=>200,'sleeve'=>190,'unknown'=>0)[$meta['kind']]??0;return$base+(int)($product['retrieval']['score']??0);}
- private function selection_meta(array $product):array{$roller=$this->roller_component($product);return array('roller_component'=>$roller['kind'],'width_inches'=>$roller['width'],'tray_width_inches'=>$this->tray_width($product));}
- private function decorate_selection(array $product,string $role):array{$display=$this->display_role($role,$product);$product['kit_role']=$display;$product['kit_roles']=array($display);$product['logical_roles']=array($role);if($role==='roller'){$meta=$this->roller_component($product);$product['roller_component']=$meta['kind'];$product['roller_width_inches']=$meta['width'];}if($role==='tray')$product['tray_width_inches']=$this->tray_width($product);return$product;}
- private function add_role(array &$product,string $role):void{$display=$this->display_role($role,$product);if(!in_array($display,$product['kit_roles']??array(),true))$product['kit_roles'][]=$display;if(!in_array($role,$product['logical_roles']??array(),true))$product['logical_roles'][]=$role;if($role==='tray')$product['tray_width_inches']=$this->tray_width($product);}
- private function display_role(string $role,array $product):string{if($role!=='roller')return$role;$kind=$this->roller_component($product)['kind'];return$kind==='frame'?'roller_frame':($kind==='sleeve'?'roller_sleeve':'roller');}
- private function validate_systems(array $products,array $state):array{$rejections=array();$roller=array();foreach($products as$i=>$product)if(in_array('roller',$product['logical_roles']??array(),true))$roller[$i]=$this->roller_component($product);$valid=array();foreach($roller as$i=>$meta)if($meta['kind']==='complete'){$valid=array($i);break;}if(!$valid){foreach($roller as$fi=>$frame){if($frame['kind']!=='frame')continue;foreach($roller as$si=>$sleeve){if($sleeve['kind']!=='sleeve')continue;if($this->compatible_widths($frame['width'],$sleeve['width'])){$valid=array($fi,$si);break 2;}}}}if($roller&&!$valid)$rejections[]=array('role'=>'roller','reason'=>'No explicit complete roller or compatible frame-and-sleeve pair was selected.');foreach(array_keys($roller)as$i)if(!in_array($i,$valid,true))$this->strip_logical_role($products[$i],'roller');foreach($valid as$i)$products[$i]['roller_system_complete']=true;$products=array_values(array_filter($products,static fn($p)=>!empty($p['logical_roles'])));$roller_width=0.0;foreach($products as$product)if(in_array('roller',$product['logical_roles']??array(),true))$roller_width=max($roller_width,(float)($this->roller_component($product)['width']??0));foreach($products as$i=>$product)if(in_array('tray',$product['logical_roles']??array(),true)&&$roller_width>0){$tray=$this->tray_width($product);if($tray>0&&$tray+0.01<$roller_width){$rejections[]=array('role'=>'tray','product_id'=>(int)($product['id']??0),'reason'=>'Tray width is smaller than the selected roller width.');$this->strip_logical_role($products[$i],'tray');}}$products=array_values(array_filter($products,static fn($p)=>!empty($p['logical_roles'])));return array($products,$rejections);}
- private function strip_logical_role(array &$product,string $role):void{$product['logical_roles']=array_values(array_filter($product['logical_roles']??array(),static fn($v)=>$v!==$role));$display_roles=$role==='roller'?array('roller','roller_frame','roller_sleeve'):array($role);$product['kit_roles']=array_values(array_filter($product['kit_roles']??array(),static fn($v)=>!in_array($v,$display_roles,true)));$product['kit_role']=$product['kit_roles'][0]??'';}
- private function compatible_widths(float $first,float $second):bool{return$first>0&&$second>0&&abs($first-$second)<0.1;}
- private function roller_component(array $product):array{$name=strtolower(html_entity_decode((string)($product['name']??''),ENT_QUOTES|ENT_HTML5,'UTF-8'));$text=$this->product_text($product);$name_frame=(bool)preg_match('/\bframes?\b/',$name);$name_sleeve=(bool)preg_match('/\bsleeves?\b|\broller covers?\b|\broller refills?\b/',$name);$name_set=(bool)preg_match('/\b(set|kit|pack|\d+\s*pc)\b/',$name);$name_roller=(bool)preg_match('/\brollers?\b/',$name);if($name_frame&&!$name_set&&!$name_sleeve)$kind='frame';elseif($name_sleeve&&!$name_set&&!$name_frame)$kind='sleeve';else{$explicit=(bool)preg_match('/\b(includes?|contains?|comes with|supplied with|comprises?)\b[^.]{0,180}(?:\bframes?\b[^.]{0,120}\bsleeves?\b|\bsleeves?\b[^.]{0,120}\bframes?\b)/',$text);if(($name_frame&&$name_sleeve)||($name_set&&$name_frame&&$name_roller)||$explicit)$kind='complete';else{$frame=(bool)preg_match('/\b(?:roller\s+)?(?:cage\s+)?frames?\b|\bframes?\s+(?:for|with)\s+.*\brollers?\b/',$text);$sleeve=(bool)preg_match('/\b(?:roller\s+)?sleeves?\b|\broller\s+covers?\b|\broller\s+refills?\b/',$text);$kind=$name_set&&$frame&&$sleeve?'complete':($frame?'frame':($sleeve?'sleeve':'unknown'));}}return array('kind'=>$kind,'width'=>$this->width_inches($name.' '.$text));}
- private function tray_width(array $product):float{return$this->width_inches($this->product_text($product));}
- private function width_inches(string $text):float{if(preg_match('/\b(\d{1,2}(?:\.\d+)?)\s*(?:"|″|inch(?:es)?\b)/i',html_entity_decode($text,ENT_QUOTES|ENT_HTML5,'UTF-8'),$m))return(float)$m[1];return 0.0;}
- private function canonical_role(string $role):string{$key=sanitize_key($role);$compact=preg_replace('/[^a-z0-9]/','',$key);$map=array('primarycoating'=>'primary_coating','primaryproduct'=>'primary_product','mainpaint'=>'primary_coating','maskingtape'=>'masking_tape','masking'=>'masking_tape','dustsheet'=>'dust_sheet','rollerframe'=>'roller','rollersleeve'=>'roller','sleeve'=>'roller','frame'=>'roller');return$map[$compact]??$key;}
- private function product_identity(array $product):string{return strtolower(html_entity_decode((string)($product['name']??'').' '.implode(' ',(array)($product['categories']??array())),ENT_QUOTES|ENT_HTML5,'UTF-8'));}
- private function product_text(array $product):string{return strtolower(html_entity_decode((string)($product['name']??'').' '.(string)($product['description']??'').' '.(string)($product['short_description']??'').' '.implode(' ',(array)($product['categories']??array())).' '.wp_json_encode($product['attributes']??array()),ENT_QUOTES|ENT_HTML5,'UTF-8'));}
- private function is_floor_project(array $state):bool{$text=strtolower((string)($state['project_type']??'').' '.(string)($state['environment']??'').' '.(string)($state['notes']??''));return(bool)preg_match('/\b(floor|garage)\b/',$text);}
- private function defer_conditional(string $role,array $state,int $plan_count):bool{if($plan_count<=1)return false;if(!in_array($role,array('primer','cleaner','filler','sandpaper','scraper'),true))return false;if($role==='cleaner'&&$this->is_floor_project($state))return false;$text=strtolower(implode(' ',array_map('strval',array_filter($state,'is_scalar'))));return!preg_match('/\b(new plaster|bare|porous|stain|stained|damage|damaged|crack|cracked|hole|holes|uneven|loose|flaking|dirty|grease|mould|mold)\b/',$text);}
- private function priority(array $product):int{$map=array('primary_coating'=>10,'primary_product'=>10,'roller'=>20,'roller_frame'=>21,'roller_sleeve'=>22,'tray'=>30,'brush'=>40,'cleaner'=>45,'masking_tape'=>50,'dust_sheet'=>60,'primer'=>70,'filler'=>72,'sandpaper'=>73,'scraper'=>74);$values=array_map(static fn($role)=>$map[$role]??80,$product['kit_roles']??array($product['kit_role']??''));return$values?min($values):80;}
- private function is_bundle(array $product):bool{$text=$this->product_text($product);return(bool)preg_match('/\b(set|kit|bundle|complete set|painting pack)\b/',$text);}
- private function decode(string $text):?array{$text=trim(preg_replace('/^```(?:json)?\s*|\s*```$/i','',trim($text)));$data=json_decode($text,true);if(is_array($data))return$data;if(preg_match('/\{[\s\S]*\}/',$text,$m)){$data=json_decode($m[0],true);return is_array($data)?$data:null;}return null;}
+    public function recommend(array $classification, array $state, array $settings): array {
+        $plan = $this->normalise_plan($classification['search_plan'] ?? array(), $state);
+        if (!$plan) { return $this->empty_result('no_search_plan'); }
+        $groups = array(); $candidate_ids = array(); $catalogue = array(); $roles_payload = array(); $conditional_roles = array(); $plan_count = count($plan);
+        foreach ($plan as $item) {
+            $role = Orion_Role_Registry::canonical((string)($item['role'] ?? ''));
+            if (!Orion_Role_Registry::supported($role)) { continue; }
+            $required = !empty($item['required']); $requirements = is_array($item['requirements'] ?? null) ? $item['requirements'] : array();
+            if ($this->defer_conditional($role, $state, $plan_count)) {
+                $conditional_roles[] = $role; $groups[] = array('role'=>$role,'required'=>false,'conditional'=>true,'requirements'=>$requirements,'candidates'=>array()); continue;
+            }
+            $limit = 'roller' === $role ? 8 : ($required ? 8 : 6); $found = $this->search_candidates($item, $role, $state, $limit); $ids = array(); $group_candidates = array();
+            foreach ($found as $product) {
+                $id = (int)($product['id'] ?? 0); if (!$id) { continue; }
+                $candidate_ids[$role][$id] = true; $ids[] = $id;
+                if (!isset($catalogue[$id])) {
+                    $catalogue[$id] = array(
+                        'id'=>$id,'name'=>$product['name'] ?? '','type'=>$product['type'] ?? '','price'=>$product['price_text'] ?? '',
+                        'categories'=>$product['categories'] ?? array(),'attributes'=>$product['attributes'] ?? array(),
+                        'description'=>mb_substr((string)($product['description'] ?? $product['short_description'] ?? ''),0,380),
+                        'stock'=>$product['stock_status'] ?? '','facts'=>$this->facts->extract($product),'retrieval'=>$product['retrieval'] ?? array(),
+                    );
+                }
+                $group_candidates[] = $catalogue[$id];
+            }
+            $groups[] = array('role'=>$role,'required'=>$required,'conditional'=>false,'requirements'=>$requirements,'candidates'=>$group_candidates);
+            $roles_payload[] = array('role'=>$role,'required'=>$required,'requirements'=>$requirements,'candidate_ids'=>$ids);
+        }
+        if (!$candidate_ids) {
+            $missing = array_values(array_filter(array_column($groups,'role'), static fn($role)=>!in_array($role,$conditional_roles,true)));
+            return array('products'=>array(),'missing_roles'=>$missing,'conditional_roles'=>array_values(array_unique($conditional_roles)),'plan'=>$groups,'diagnostic'=>array('status'=>'no_relevant_candidates','catalogue_products'=>0,'role_candidates'=>0));
+        }
+
+        $payload = array('state'=>$state,'products'=>array_values($catalogue),'roles'=>$roles_payload); $payload_json = wp_json_encode($payload);
+        $provider = Orion_AI_Provider_Factory::create($settings,'selection'); $selection_roles = array_values(array_keys($candidate_ids));
+        $tool = array('type'=>'function','function'=>array('name'=>'select_products','description'=>'Select only verified candidate IDs and report unresolved roles.','parameters'=>array(
+            'type'=>'object','additionalProperties'=>false,'properties'=>array(
+                'selections'=>array('type'=>'array','maxItems'=>20,'items'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array(
+                    'role'=>array('type'=>'string','enum'=>$selection_roles),'product_id'=>array('type'=>'integer'),'reason'=>array('type'=>'string'),
+                ),'required'=>array('role','product_id','reason'))),
+                'missing_roles'=>array('type'=>'array','items'=>array('type'=>'string','enum'=>$selection_roles)),
+            ),'required'=>array('selections','missing_roles'),
+        )));
+        $prompt = 'Use the supplied structured facts and live catalogue text to match product IDs to roles. Select only IDs allowed for that role. Never infer coverage, suitability or included components. A roller role requires either one explicitly complete frame-and-sleeve set or a width-compatible frame and sleeve pair. A tray must not be narrower than the selected roller. Reuse an ID across roles only for an explicit set, kit or bundle whose contents support every role. Prefer the practical core kit over conditional preparation products. Call select_products exactly once.';
+        $result = $provider->chat(array(array('role'=>'system','content'=>$prompt),array('role'=>'user','content'=>$payload_json)),array($tool));
+        $data = null; $calls = $result['message']['tool_calls'] ?? array();
+        if ($calls) { $data = json_decode((string)($calls[0]['function']['arguments'] ?? '{}'),true); }
+        if (!is_array($data) && !empty($result['ok'])) { $data = $this->decode((string)($result['message']['content'] ?? '')); }
+
+        $selected = array(); $selected_index = array();
+        if (is_array($data)) { foreach (($data['selections'] ?? array()) as $choice) {
+            $role = Orion_Role_Registry::canonical((string)($choice['role'] ?? '')); $id = absint($choice['product_id'] ?? 0);
+            if (!$role || !$id || empty($candidate_ids[$role][$id])) { continue; }
+            $product = $this->products->get_product($id);
+            if (!$product || empty($product['in_stock']) || !$this->candidate_allowed($product,$role,$state)) { continue; }
+            if (isset($selected_index[$id])) {
+                if (!$this->facts->is_bundle($product)) { continue; }
+                $index = $selected_index[$id]; $this->add_role($selected[$index],$role); $reason = sanitize_text_field((string)($choice['reason'] ?? ''));
+                if ($reason !== '') { $selected[$index]['recommendation_reason'] .= ' ' . $reason; }
+                continue;
+            }
+            $product = $this->decorate_selection($product,$role); $product['recommendation_reason'] = sanitize_text_field((string)($choice['reason'] ?? ''));
+            $selected_index[$id] = count($selected); $selected[] = $product;
+        } }
+
+        [$selected,$rejections] = $this->validator->validate($selected,$state);
+        usort($selected,fn($first,$second)=>$this->priority($first)<=>$this->priority($second)); $selected_before_limit = count($selected);
+        $displayed = array_slice($selected,0,max(1,(int)($settings['max_products'] ?? 6)));
+        [$displayed,$display_rejections] = $this->validator->validate($displayed,$state); $rejections = array_values(array_merge($rejections,$display_rejections));
+        $displayed_roles = array(); foreach ($displayed as $product) { foreach ((array)($product['logical_roles'] ?? array()) as $role) { if ($role !== '') { $displayed_roles[] = $role; } } }
+        $missing = array(); foreach ($groups as $group) { if (empty($group['conditional']) && !in_array($group['role'],$displayed_roles,true)) { $missing[] = $group['role']; } }
+        if (empty($result['ok'])) {
+            $diagnostic = array('status'=>'selector_provider_error','error'=>sanitize_text_field((string)($result['error'] ?? '')),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json));
+        } elseif (!is_array($data)) {
+            $diagnostic = array('status'=>'invalid_selector_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content'] ?? '')),0,500),'usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json));
+        } else {
+            $diagnostic = array('status'=>'ok','usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'fallback_used'=>!empty($result['fallback_used']),
+                'catalogue_products'=>count($catalogue),'role_candidates'=>array_sum(array_map('count',array_column($roles_payload,'candidate_ids'))),
+                'payload_chars'=>strlen((string)$payload_json),'selected_before_card_limit'=>$selected_before_limit,'displayed_products'=>count($displayed),
+                'roller_system_complete'=>in_array('roller',$displayed_roles,true),'selection_rejections'=>$rejections);
+        }
+        return array('products'=>$displayed,'missing_roles'=>array_values(array_unique($missing)),'conditional_roles'=>array_values(array_unique($conditional_roles)),'plan'=>$groups,'diagnostic'=>$diagnostic);
+    }
+
+    private function normalise_plan(array $plan,array $state): array {
+        $out = array(); $seen = array();
+        foreach ($plan as $item) {
+            if (!is_array($item)) { continue; } $role = Orion_Role_Registry::canonical((string)($item['role'] ?? ''));
+            if (!Orion_Role_Registry::supported($role) || isset($seen[$role])) { continue; }
+            if ('dust_sheet' === $role && Orion_Routing_Rules::is_floor_project($state)) { continue; }
+            $item['role'] = $role; $out[] = $item; $seen[$role] = true;
+        }
+        $complete = Orion_Routing_Rules::wants_complete_kit($state) || count($out) >= 6;
+        if ($complete && (isset($seen['primary_coating']) || isset($seen['primary_product']))) {
+            $surface = sanitize_text_field((string)($state['surface'] ?? 'painted surface'));
+            $core = array('roller'=>'complete paint roller system with frame and sleeve for '.$surface,'tray'=>'paint roller tray compatible with the selected roller','brush'=>'paint brush for cutting in '.$surface,'masking_tape'=>'decorators masking tape for protecting edges');
+            if (Orion_Routing_Rules::is_floor_project($state)) { $core['cleaner'] = 'floor cleaner or degreaser for coating preparation'; }
+            else { $core['dust_sheet'] = 'protective dust sheet for painting'; }
+            foreach ($core as $role => $query) { if (!isset($seen[$role])) { $out[] = array('role'=>$role,'query'=>$query,'required'=>false,'requirements'=>array('surface'=>$surface)); $seen[$role] = true; } }
+        }
+        usort($out,static fn($first,$second)=>Orion_Role_Registry::priority((string)($first['role'] ?? ''))<=>Orion_Role_Registry::priority((string)($second['role'] ?? '')));
+        return array_slice($out,0,10);
+    }
+
+    private function search_candidates(array $item,string $role,array $state,int $limit): array {
+        $query = sanitize_text_field((string)($item['query'] ?? '')); $requirements = is_array($item['requirements'] ?? null) ? $item['requirements'] : array(); $queries = array($query);
+        if ('roller' === $role) { $surface = sanitize_text_field((string)($state['surface'] ?? '')); $queries[] = 'complete paint roller set with frame and sleeve '.$surface; $queries[] = 'paint roller frame '.$surface; $queries[] = 'paint roller sleeve '.$surface; }
+        $found = array();
+        foreach (array_unique(array_filter($queries)) as $candidate_query) { foreach ($this->products->search(array('query'=>$candidate_query,'role'=>$role,'requirements'=>$requirements,'in_stock'=>true,'limit'=>$limit)) as $product) {
+            $id = (int)($product['id'] ?? 0); if ($id && !isset($found[$id]) && $this->candidate_allowed($product,$role,$state)) { $found[$id] = $product; }
+        } }
+        if ('roller' === $role) { uasort($found,function($first,$second): int {
+            $first_meta = $this->facts->roller_component($first); $second_meta = $this->facts->roller_component($second); $weight = array('complete'=>300,'frame'=>200,'sleeve'=>190,'unknown'=>0);
+            return (($weight[$second_meta['kind']] ?? 0)+(int)($second['retrieval']['score'] ?? 0)) <=> (($weight[$first_meta['kind']] ?? 0)+(int)($first['retrieval']['score'] ?? 0));
+        }); }
+        return array_slice(array_values($found),0,$limit);
+    }
+
+    private function candidate_allowed(array $product,string $role,array $state): bool {
+        $facts = $this->facts->extract($product); $functions = $facts['functions']; $identity = strtolower((string)($product['name'] ?? '').' '.implode(' ',(array)($product['categories'] ?? array())));
+        if ('primary_coating' === $role) { return in_array('primary_coating',$functions,true) && !preg_match('/\b(brush(?:es)?|roller|sleeve|frame|tray|plasterboard|board|tile|carpet|adhesive|filler)\b/',$identity); }
+        if (in_array($role,array('cleaner','brush','tray','masking_tape','dust_sheet'),true) && !in_array($role,$functions,true)) { return false; }
+        if ('roller' !== $role) { return true; }
+        $component = $this->facts->roller_component($product); if ('unknown' === $component['kind']) { return false; }
+        $text = $this->facts->text($product); $area = (float)($state['area_m2'] ?? 0);
+        if ($area >= 10 && (($component['width'] > 0 && $component['width'] <= 4.5) || preg_match('/\b(mini|radiator)\b/',$text))) { return false; }
+        if (Orion_Routing_Rules::is_floor_project($state) && preg_match('/\b(gloss|emulsion|wall|ceiling|radiator|mini)\b/',$text) && !preg_match('/\b(floor|garage|epoxy|floor coating|heavy duty coating)\b/',$text)) { return false; }
+        return true;
+    }
+
+    private function decorate_selection(array $product,string $role): array {
+        $facts = $this->facts->extract($product); $display = $role;
+        if ('roller' === $role) { $display = array('frame'=>'roller_frame','sleeve'=>'roller_sleeve','complete'=>'roller')[$facts['roller_component']] ?? 'roller'; }
+        $product['kit_role'] = $display; $product['kit_roles'] = array($display); $product['logical_roles'] = array($role); $product['orion_facts'] = $facts;
+        if ('roller' === $role) { $product['roller_component'] = $facts['roller_component']; $product['roller_width_inches'] = $facts['roller_width_inches']; }
+        if ('tray' === $role) { $product['tray_width_inches'] = $facts['tray_width_inches']; }
+        return $product;
+    }
+    private function add_role(array &$product,string $role): void {
+        $display = $role; if ('roller' === $role) { $kind = $this->facts->roller_component($product)['kind']; $display = array('frame'=>'roller_frame','sleeve'=>'roller_sleeve','complete'=>'roller')[$kind] ?? 'roller'; }
+        if (!in_array($display,(array)($product['kit_roles'] ?? array()),true)) { $product['kit_roles'][] = $display; }
+        if (!in_array($role,(array)($product['logical_roles'] ?? array()),true)) { $product['logical_roles'][] = $role; }
+        $product['kit_role'] = $product['kit_roles'][0] ?? $display;
+    }
+    private function defer_conditional(string $role,array $state,int $plan_count): bool {
+        if ($plan_count <= 1 || !in_array($role,array('primer','cleaner','filler','sandpaper','scraper'),true)) { return false; }
+        if ('cleaner' === $role && Orion_Routing_Rules::is_floor_project($state)) { return false; }
+        return !Orion_Routing_Rules::has_surface_condition($state);
+    }
+    private function priority(array $product): int { $values = array_map(static fn($role)=>Orion_Role_Registry::priority((string)$role),(array)($product['kit_roles'] ?? array($product['kit_role'] ?? ''))); return $values ? min($values) : 80; }
+    private function empty_result(string $status): array { return array('products'=>array(),'missing_roles'=>array(),'conditional_roles'=>array(),'plan'=>array(),'diagnostic'=>array('status'=>$status)); }
+    private function decode(string $text): ?array {
+        $text = trim((string)preg_replace('/^```(?:json)?\s*|\s*```$/i','',trim($text))); $data = json_decode($text,true); if (is_array($data)) { return $data; }
+        if (preg_match('/\{[\s\S]*\}/',$text,$matches)) { $data = json_decode($matches[0],true); return is_array($data) ? $data : null; }
+        return null;
+    }
 }
