@@ -17,7 +17,8 @@ final class Orion_Semantic_Product_Planner {
         if (!$plan) { return $this->empty_result('no_search_plan'); }
         $groups = array(); $candidate_ids = array(); $catalogue = array(); $roles_payload = array(); $conditional_roles = array(); $plan_count = count($plan);
         foreach ($plan as $item) {
-            $role = Orion_Role_Registry::canonical((string)($item['role'] ?? ''));
+            $query = sanitize_text_field((string)($item['query'] ?? ''));
+            $role = Orion_Role_Registry::canonical_for_query((string)($item['role'] ?? ''), $query);
             if (!Orion_Role_Registry::supported($role)) { continue; }
             $required = !empty($item['required']); $requirements = is_array($item['requirements'] ?? null) ? $item['requirements'] : array();
             if ($this->defer_conditional($role, $state, $plan_count)) {
@@ -78,20 +79,23 @@ final class Orion_Semantic_Product_Planner {
         } }
 
         [$selected,$rejections] = $this->validator->validate($selected,$state);
+        [$selected,$recovery] = $this->recover_roller_system($selected,$candidate_ids,$state);
+        [$selected,$recovery_rejections] = $this->validator->validate($selected,$state);
+        $rejections = array_values(array_merge($rejections,$recovery_rejections));
         usort($selected,fn($first,$second)=>$this->priority($first)<=>$this->priority($second)); $selected_before_limit = count($selected);
         $displayed = array_slice($selected,0,max(1,(int)($settings['max_products'] ?? 6)));
         [$displayed,$display_rejections] = $this->validator->validate($displayed,$state); $rejections = array_values(array_merge($rejections,$display_rejections));
         $displayed_roles = array(); foreach ($displayed as $product) { foreach ((array)($product['logical_roles'] ?? array()) as $role) { if ($role !== '') { $displayed_roles[] = $role; } } }
         $missing = array(); foreach ($groups as $group) { if (empty($group['conditional']) && !in_array($group['role'],$displayed_roles,true)) { $missing[] = $group['role']; } }
         if (empty($result['ok'])) {
-            $diagnostic = array('status'=>'selector_provider_error','error'=>sanitize_text_field((string)($result['error'] ?? '')),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json));
+            $diagnostic = array('status'=>'selector_provider_error','error'=>sanitize_text_field((string)($result['error'] ?? '')),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json),'deterministic_recovery'=>$recovery);
         } elseif (!is_array($data)) {
-            $diagnostic = array('status'=>'invalid_selector_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content'] ?? '')),0,500),'usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json));
+            $diagnostic = array('status'=>'invalid_selector_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content'] ?? '')),0,500),'usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json),'deterministic_recovery'=>$recovery);
         } else {
             $diagnostic = array('status'=>'ok','usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'fallback_used'=>!empty($result['fallback_used']),
                 'catalogue_products'=>count($catalogue),'role_candidates'=>array_sum(array_map('count',array_column($roles_payload,'candidate_ids'))),
                 'payload_chars'=>strlen((string)$payload_json),'selected_before_card_limit'=>$selected_before_limit,'displayed_products'=>count($displayed),
-                'roller_system_complete'=>in_array('roller',$displayed_roles,true),'selection_rejections'=>$rejections);
+                'roller_system_complete'=>in_array('roller',$displayed_roles,true),'selection_rejections'=>$rejections,'deterministic_recovery'=>$recovery);
         }
         return array('products'=>$displayed,'missing_roles'=>array_values(array_unique($missing)),'conditional_roles'=>array_values(array_unique($conditional_roles)),'plan'=>$groups,'diagnostic'=>$diagnostic);
     }
@@ -99,10 +103,12 @@ final class Orion_Semantic_Product_Planner {
     private function normalise_plan(array $plan,array $state): array {
         $out = array(); $seen = array();
         foreach ($plan as $item) {
-            if (!is_array($item)) { continue; } $role = Orion_Role_Registry::canonical((string)($item['role'] ?? ''));
+            if (!is_array($item)) { continue; }
+            $query = sanitize_text_field((string)($item['query'] ?? ''));
+            $role = Orion_Role_Registry::canonical_for_query((string)($item['role'] ?? ''), $query);
             if (!Orion_Role_Registry::supported($role) || isset($seen[$role])) { continue; }
             if ('dust_sheet' === $role && Orion_Routing_Rules::is_floor_project($state)) { continue; }
-            $item['role'] = $role; $out[] = $item; $seen[$role] = true;
+            $item['role'] = $role; $item['query'] = $query; $out[] = $item; $seen[$role] = true;
         }
         $complete = Orion_Routing_Rules::wants_complete_kit($state) || count($out) >= 6;
         if ($complete && (isset($seen['primary_coating']) || isset($seen['primary_product']))) {
@@ -140,6 +146,35 @@ final class Orion_Semantic_Product_Planner {
         if ($area >= 10 && (($component['width'] > 0 && $component['width'] <= 4.5) || preg_match('/\b(mini|radiator)\b/',$text))) { return false; }
         if (Orion_Routing_Rules::is_floor_project($state) && preg_match('/\b(gloss|emulsion|wall|ceiling|radiator|mini)\b/',$text) && !preg_match('/\b(floor|garage|epoxy|floor coating|heavy duty coating)\b/',$text)) { return false; }
         return true;
+    }
+
+    private function recover_roller_system(array $selected,array $candidate_ids,array $state): array {
+        foreach ($selected as $product) { if (in_array('roller',(array)($product['logical_roles'] ?? array()),true)) { return array($selected,array()); } }
+        $complete = array(); $frames = array(); $sleeves = array();
+        foreach (array_keys((array)($candidate_ids['roller'] ?? array())) as $id) {
+            $product = $this->products->get_product((int)$id);
+            if (!$product || empty($product['in_stock']) || !$this->candidate_allowed($product,'roller',$state)) { continue; }
+            $meta = $this->facts->roller_component($product); $entry = array('product'=>$product,'width'=>(float)$meta['width']);
+            if ('complete' === $meta['kind']) { $complete[] = $entry; }
+            elseif ('frame' === $meta['kind']) { $frames[] = $entry; }
+            elseif ('sleeve' === $meta['kind']) { $sleeves[] = $entry; }
+        }
+        if ($complete) {
+            $id = (int)($complete[0]['product']['id'] ?? 0);
+            foreach ($selected as $index => $product) {
+                if ((int)($product['id'] ?? 0) === $id && $this->facts->is_bundle($product)) { $this->add_role($selected[$index],'roller'); return array($selected,array('roller_complete_set'=>$id)); }
+            }
+            $product = $this->decorate_selection($complete[0]['product'],'roller'); $product['recommendation_reason'] = 'Selected by deterministic complete roller-system recovery.'; $selected[] = $product;
+            return array($selected,array('roller_complete_set'=>$id));
+        }
+        foreach ($frames as $frame) { foreach ($sleeves as $sleeve) {
+            if ($frame['width'] <= 0 || $sleeve['width'] <= 0 || abs($frame['width']-$sleeve['width']) > 0.15) { continue; }
+            $frame_product = $this->decorate_selection($frame['product'],'roller'); $frame_product['recommendation_reason'] = 'Selected as the compatible roller frame.';
+            $sleeve_product = $this->decorate_selection($sleeve['product'],'roller'); $sleeve_product['recommendation_reason'] = 'Selected as the width-compatible roller sleeve.';
+            $selected[] = $frame_product; $selected[] = $sleeve_product;
+            return array($selected,array('roller_pair'=>array((int)($frame_product['id'] ?? 0),(int)($sleeve_product['id'] ?? 0))));
+        } }
+        return array($selected,array());
     }
 
     private function decorate_selection(array $product,string $role): array {
