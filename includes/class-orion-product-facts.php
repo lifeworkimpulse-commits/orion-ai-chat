@@ -10,11 +10,13 @@ final class Orion_Product_Facts {
             'primary_coating'=>'/\b(paint|coating|epoxy|varnish|stain)\b/', 'primer'=>'/\b(primer|undercoat)\b/',
             'cleaner'=>'/\b(cleaner|degreaser|sugar soap)\b/', 'filler'=>'/\b(filler|repair compound)\b/',
             'brush'=>'/\b(paint brush|decorating brush|masonry brush|cutting.?in brush)\b/',
-            'tray'=>'/\b(paint tray|roller tray|scuttle|painting pack|roller set)\b/',
+            'tray'=>'/\b(paint tray|roller tray|scuttle)\b/',
             'masking_tape'=>'/\b(masking tape|painter[’\x27]?s tape|decorators? tape)\b/',
             'dust_sheet'=>'/\b(dust sheet|protective sheet|polythene sheet)\b/',
         );
         foreach ($patterns as $function => $pattern) { if (preg_match($pattern, $identity)) { $functions[] = $function; } }
+        $included = $this->included_components($product);
+        foreach (array('tray','brush','masking_tape','dust_sheet') as $component) { if (in_array($component, $included, true)) { $functions[] = $component; } }
         $roller = $this->roller_component($product);
         if ('unknown' !== $roller['kind']) { $functions[] = 'roller'; }
         $surfaces = array();
@@ -26,7 +28,7 @@ final class Orion_Product_Facts {
         return array(
             'functions'=>array_values(array_unique($functions)), 'surfaces'=>array_values(array_unique($surfaces)),
             'roller_component'=>$roller['kind'], 'roller_width_inches'=>$roller['width'], 'tray_width_inches'=>$this->tray_width($product),
-            'included_components'=>$this->included_components($product), 'coverage_m2_per_litre'=>$coverage, 'is_bundle'=>$this->is_bundle($product),
+            'included_components'=>$included, 'coverage_m2_per_litre'=>$coverage, 'is_bundle'=>$this->is_bundle($product),
         );
     }
 

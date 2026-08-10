@@ -13,7 +13,8 @@
   },
   "scripts": {
     "lint": "phpcs --standard=phpcs.xml.dist",
-    "analyse": "phpstan analyse --configuration=phpstan.neon.dist",
+    "analyse": "phpstan analyse --configuration=phpstan-stabilization.neon",
+    "analyse:full": "phpstan analyse --configuration=phpstan.neon.dist",
     "test": "phpunit"
   },
   "config": { "allow-plugins": { "dealerdirect/phpcodesniffer-composer-installer": true } }
