@@ -248,6 +248,15 @@
         actions.appendChild(add);
       }
       content.append(name, price, stock, actions);
+      const categories = Array.isArray(product.categories)
+        ? product.categories.map(category => String(category).trim()).filter(Boolean)
+        : [];
+      if (categories.length) {
+        const category = document.createElement('small');
+        category.className = 'orion-ai-product-category';
+        category.textContent = `Category: ${categories.join(' · ')}`;
+        content.appendChild(category);
+      }
       card.append(image, content);
       grid.appendChild(card);
     });
