@@ -28,7 +28,8 @@ final class Orion_Product_Facts {
         return array(
             'functions'=>array_values(array_unique($functions)), 'surfaces'=>array_values(array_unique($surfaces)),
             'roller_component'=>$roller['kind'], 'roller_width_inches'=>$roller['width'], 'tray_width_inches'=>$this->tray_width($product),
-            'included_components'=>$included, 'coverage_m2_per_litre'=>$coverage, 'is_bundle'=>$this->is_bundle($product),
+            'included_components'=>$included, 'coverage_m2_per_litre'=>$coverage, 'pack_volume_litres'=>$this->pack_volume_litres($product),
+            'is_bundle'=>$this->is_bundle($product),
         );
     }
 
@@ -53,6 +54,12 @@ final class Orion_Product_Facts {
         return array('kind'=>$kind, 'width'=>$this->width_inches($name . ' ' . $text));
     }
     public function tray_width(array $product): float { return $this->width_inches($this->text($product)); }
+    public function pack_volume_litres(array $product): ?float {
+        $text = html_entity_decode((string)($product['name'] ?? '') . ' ' . (string)($product['short_description'] ?? '') . ' ' . (string)($product['description'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if (preg_match('/\b(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:l|litres?|liters?)\b/i', $text, $matches)) { return (float)$matches[1] * (float)$matches[2]; }
+        if (preg_match('/\b(\d+(?:\.\d+)?)\s*(?:l|litres?|liters?)\b/i', $text, $matches)) { return (float)$matches[1]; }
+        return null;
+    }
     public function text(array $product): string {
         return strtolower(html_entity_decode((string)($product['name'] ?? '') . ' ' . (string)($product['description'] ?? '') . ' ' . (string)($product['short_description'] ?? '') . ' ' . implode(' ', (array)($product['categories'] ?? array())) . ' ' . json_encode($product['attributes'] ?? array()), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     }

@@ -21,6 +21,10 @@ final class Orion_Product_Facts_Test extends TestCase {
     }
     public function test_structured_product_functions_are_extracted(): void {
         $product=array('name'=>'Heavy Duty Floor Paint Grey 5L','description'=>'Suitable for concrete garage floors. Coverage 8 m2 per litre.','categories'=>array('Floor Paint')); $facts=$this->facts->extract($product);
-        self::assertContains('primary_coating',$facts['functions']); self::assertContains('floor',$facts['surfaces']); self::assertSame(8.0,$facts['coverage_m2_per_litre']);
+        self::assertContains('primary_coating',$facts['functions']); self::assertContains('floor',$facts['surfaces']); self::assertSame(8.0,$facts['coverage_m2_per_litre']); self::assertSame(5.0,$facts['pack_volume_litres']);
+    }
+    public function test_multi_pack_volume_is_totalled_without_inventing_coverage(): void {
+        $product=array('name'=>'Contract Matt 2 x 10L Bundle','description'=>'White trade paint','categories'=>array('Paint')); $facts=$this->facts->extract($product);
+        self::assertSame(20.0,$facts['pack_volume_litres']); self::assertNull($facts['coverage_m2_per_litre']);
     }
 }

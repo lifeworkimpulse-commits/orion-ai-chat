@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 vendor/
 .env
 .env.*
@@ -6,6 +6,7 @@ vendor/
 *.zip
 *.bak
 *.tmp
+.phpunit.result.cache
 .DS_Store
 Thumbs.db
 .vscode/
