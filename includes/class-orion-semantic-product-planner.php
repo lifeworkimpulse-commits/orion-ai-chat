@@ -78,24 +78,29 @@ final class Orion_Semantic_Product_Planner {
             $selected_index[$id] = count($selected); $selected[] = $product;
         } }
 
+        $max_products = max(1,(int)($settings['max_products'] ?? 6));
         [$selected,$rejections] = $this->validator->validate($selected,$state);
         [$selected,$recovery] = $this->recover_roller_system($selected,$candidate_ids,$state);
+        [$selected,$core_recovery] = $this->recover_core_roles($selected,$candidate_ids,$state,$max_products);
+        if ($core_recovery) { $recovery['core_roles'] = $core_recovery; }
         [$selected,$recovery_rejections] = $this->validator->validate($selected,$state);
         $rejections = array_values(array_merge($rejections,$recovery_rejections));
+        $selected = $this->annotate_quantity_guidance($selected,$state);
         usort($selected,fn($first,$second)=>$this->priority($first)<=>$this->priority($second)); $selected_before_limit = count($selected);
-        $displayed = array_slice($selected,0,max(1,(int)($settings['max_products'] ?? 6)));
+        $displayed = array_slice($selected,0,$max_products);
         [$displayed,$display_rejections] = $this->validator->validate($displayed,$state); $rejections = array_values(array_merge($rejections,$display_rejections));
         $displayed_roles = array(); foreach ($displayed as $product) { foreach ((array)($product['logical_roles'] ?? array()) as $role) { if ($role !== '') { $displayed_roles[] = $role; } } }
         $missing = array(); foreach ($groups as $group) { if (empty($group['conditional']) && !in_array($group['role'],$displayed_roles,true)) { $missing[] = $group['role']; } }
         if (empty($result['ok'])) {
-            $diagnostic = array('status'=>'selector_provider_error','error'=>sanitize_text_field((string)($result['error'] ?? '')),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json),'deterministic_recovery'=>$recovery);
+            $diagnostic = array('status'=>'selector_provider_error','error'=>sanitize_text_field((string)($result['error'] ?? '')),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json),'deterministic_recovery'=>$recovery,'quantity_guidance'=>$this->quantity_diagnostics($displayed));
         } elseif (!is_array($data)) {
-            $diagnostic = array('status'=>'invalid_selector_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content'] ?? '')),0,500),'usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json),'deterministic_recovery'=>$recovery);
+            $diagnostic = array('status'=>'invalid_selector_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content'] ?? '')),0,500),'usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'catalogue_products'=>count($catalogue),'payload_chars'=>strlen((string)$payload_json),'deterministic_recovery'=>$recovery,'quantity_guidance'=>$this->quantity_diagnostics($displayed));
         } else {
             $diagnostic = array('status'=>'ok','usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'fallback_used'=>!empty($result['fallback_used']),
                 'catalogue_products'=>count($catalogue),'role_candidates'=>array_sum(array_map('count',array_column($roles_payload,'candidate_ids'))),
                 'payload_chars'=>strlen((string)$payload_json),'selected_before_card_limit'=>$selected_before_limit,'displayed_products'=>count($displayed),
-                'roller_system_complete'=>in_array('roller',$displayed_roles,true),'selection_rejections'=>$rejections,'deterministic_recovery'=>$recovery);
+                'roller_system_complete'=>in_array('roller',$displayed_roles,true),'selection_rejections'=>$rejections,'deterministic_recovery'=>$recovery,
+                'quantity_guidance'=>$this->quantity_diagnostics($displayed));
         }
         return array('products'=>$displayed,'missing_roles'=>array_values(array_unique($missing)),'conditional_roles'=>array_values(array_unique($conditional_roles)),'plan'=>$groups,'diagnostic'=>$diagnostic);
     }
@@ -175,6 +180,47 @@ final class Orion_Semantic_Product_Planner {
             return array($selected,array('roller_pair'=>array((int)($frame_product['id'] ?? 0),(int)($sleeve_product['id'] ?? 0))));
         } }
         return array($selected,array());
+    }
+
+    private function recover_core_roles(array $selected,array $candidate_ids,array $state,int $max_products): array {
+        $recovered = array(); $roles = array('tray','brush','cleaner','masking_tape','dust_sheet');
+        foreach ($roles as $role) {
+            $has_role = false; foreach ($selected as $product) { if (in_array($role,(array)($product['logical_roles'] ?? array()),true)) { $has_role = true; break; } }
+            if ($has_role || empty($candidate_ids[$role])) { continue; }
+            foreach (array_keys((array)$candidate_ids[$role]) as $id) {
+                $product = $this->products->get_product((int)$id);
+                if (!$product || empty($product['in_stock']) || !$this->candidate_allowed($product,$role,$state)) { continue; }
+                $existing = null; foreach ($selected as $index => $item) { if ((int)($item['id'] ?? 0) === (int)$id) { $existing = $index; break; } }
+                if (null !== $existing) {
+                    if (!$this->facts->is_bundle($product)) { continue; }
+                    $this->add_role($selected[$existing],$role); $recovered[$role] = (int)$id; break;
+                }
+                if (count($selected) >= $max_products) { break; }
+                $product = $this->decorate_selection($product,$role); $product['recommendation_reason'] = 'Added from a verified catalogue candidate to complete the requested core kit.';
+                $selected[] = $product; $recovered[$role] = (int)$id; break;
+            }
+        }
+        return array($selected,$recovered);
+    }
+
+    private function annotate_quantity_guidance(array $selected,array $state): array {
+        $area = (float)($state['area_m2'] ?? 0);
+        foreach ($selected as $index => $product) {
+            if (!in_array('primary_coating',(array)($product['logical_roles'] ?? array()),true)) { continue; }
+            $facts = is_array($product['orion_facts'] ?? null) ? $product['orion_facts'] : $this->facts->extract($product);
+            $coverage = isset($facts['coverage_m2_per_litre']) ? (float)$facts['coverage_m2_per_litre'] : 0.0;
+            $volume = isset($facts['pack_volume_litres']) ? (float)$facts['pack_volume_litres'] : 0.0;
+            $status = 'not_calculable'; $reason = 'Project quantity was not calculated because verified manufacturer coverage, coat count or pack-volume evidence is incomplete.';
+            if ($area <= 0) { $reason = 'Project area is not available, so quantity was not calculated.'; }
+            elseif ($coverage > 0 && $volume > 0) { $status = 'evidence_present_review_required'; $reason = 'Coverage and pack volume are explicit, but coat count and manufacturer instructions must be confirmed before calculating packs.'; }
+            $selected[$index]['quantity_guidance'] = array('status'=>$status,'can_calculate'=>false,'area_m2'=>$area>0?$area:null,'coverage_m2_per_litre'=>$coverage>0?$coverage:null,'pack_volume_litres'=>$volume>0?$volume:null,'reason'=>$reason);
+        }
+        return $selected;
+    }
+
+    private function quantity_diagnostics(array $products): array {
+        $out = array(); foreach ($products as $product) { if (!empty($product['quantity_guidance'])) { $out[] = array('id'=>(int)($product['id'] ?? 0),'guidance'=>$product['quantity_guidance']); } }
+        return $out;
     }
 
     private function decorate_selection(array $product,string $role): array {
