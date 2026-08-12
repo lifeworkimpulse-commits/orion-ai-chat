@@ -28,7 +28,7 @@ final class Orion_Routing_Rules {
     }
 
     public static function is_floor_project(array $state): bool {
-        $text = strtolower((string)($state['project_type'] ?? '') . ' ' . (string)($state['surface'] ?? '') . ' ' . (string)($state['environment'] ?? '') . ' ' . (string)($state['notes'] ?? ''));
+        $text = self::state_text($state);
         return (bool) preg_match('/\b(floor|garage)\b/', $text);
     }
     public static function wants_complete_kit(array $state): bool {
@@ -36,7 +36,34 @@ final class Orion_Routing_Rules {
         return (bool) preg_match('/\b(everything needed|complete (?:kit|materials|product kit)|all materials|all supplies|including[^.]{0,80}supplies)\b/', $text);
     }
     public static function has_surface_condition(array $state): bool {
-        $text = strtolower(implode(' ', array_map('strval', array_filter($state, 'is_scalar'))));
-        return (bool) preg_match('/\b(new plaster|bare|porous|stain|stained|damage|damaged|crack|cracked|hole|holes|uneven|loose|flaking|dirty|grease|mould|mold)\b/', $text);
+        $text = self::positive_surface_text($state);
+        return (bool) preg_match('/\b(new plaster|bare|unsealed|porous|stain|stained|damage|damaged|cracks?|cracked|holes?|uneven|loose|flaking|peeling|dirty|dusty|oil|grease|greasy|contaminated|mould|mold)\b/', $text);
+    }
+    public static function preparation_role_needed(string $role,array $state): bool {
+        $role = strtolower(trim($role));
+        $text = self::positive_surface_text($state);
+        if ('primer' === $role) {
+            return (bool) preg_match('/\b(new plaster|bare|unsealed|porous|stain|stained|water mark|nicotine)\b/', $text);
+        }
+        if ('cleaner' === $role) {
+            return (bool) preg_match('/\b(dirty|dusty|oil|oily|grease|greasy|contaminated|contamination|mould|mold)\b/', $text);
+        }
+        if ('filler' === $role) {
+            return (bool) preg_match('/\b(damage|damaged|cracks?|cracked|holes?|uneven|spall|spalled|spalling)\b/', $text);
+        }
+        if (in_array($role,array('sandpaper','scraper'),true)) {
+            return (bool) preg_match('/\b(previous coating|old coating|existing coating|previously painted|painted surface|flaking|peeling|loose paint|gloss surface)\b/', $text);
+        }
+        return self::has_surface_condition($state);
+    }
+    private static function state_text(array $state): string {
+        return strtolower(implode(' ',array_map('strval',array_filter($state,'is_scalar'))));
+    }
+    private static function positive_surface_text(array $state): string {
+        $text = self::state_text($state);
+        $condition = '(?:oil|grease|damp|moisture|cracks?|holes?|damage|mould|mold|stains?|previous coatings?|old coatings?|existing coatings?|loose paint|flaking|peeling)';
+        $pattern = '/\b(?:no|without|free\s+(?:from|of))\s+(?:any\s+)?' . $condition . '(?:\s*,\s*' . $condition . ')*(?:\s*(?:and|or)\s*' . $condition . ')?/i';
+        $cleaned = preg_replace($pattern,' ',$text);
+        return is_string($cleaned) ? $cleaned : $text;
     }
 }

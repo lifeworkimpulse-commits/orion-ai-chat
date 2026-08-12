@@ -12,4 +12,21 @@ final class Orion_Routing_Rules_Test extends TestCase {
         $metric=Orion_Routing_Rules::extract_dimensions('My garage is 6 x 4 metres'); self::assertSame('m',$metric['dimension_unit']);
     }
     public function test_floor_and_complete_kit_state(): void { $state=array('project_type'=>'garage floor coating','notes'=>'Find everything needed'); self::assertTrue(Orion_Routing_Rules::is_floor_project($state)); self::assertTrue(Orion_Routing_Rules::wants_complete_kit($state)); }
+    public function test_negated_conditions_do_not_activate_unrelated_preparation_roles(): void {
+        $state=array('surface'=>'concrete','notes'=>'Concrete is bare, clean, dry and sound, with no oil, cracks, damp or previous coating.');
+        self::assertTrue(Orion_Routing_Rules::preparation_role_needed('primer',$state));
+        self::assertFalse(Orion_Routing_Rules::preparation_role_needed('cleaner',$state));
+        self::assertFalse(Orion_Routing_Rules::preparation_role_needed('filler',$state));
+        self::assertFalse(Orion_Routing_Rules::preparation_role_needed('sandpaper',$state));
+        self::assertFalse(Orion_Routing_Rules::preparation_role_needed('scraper',$state));
+    }
+    public function test_positive_conditions_activate_only_matching_preparation_roles(): void {
+        self::assertTrue(Orion_Routing_Rules::preparation_role_needed('cleaner',array('notes'=>'The floor has oily grease contamination.')));
+        self::assertFalse(Orion_Routing_Rules::preparation_role_needed('filler',array('notes'=>'The floor has oily grease contamination.')));
+        self::assertTrue(Orion_Routing_Rules::preparation_role_needed('filler',array('notes'=>'The wall has cracks and two holes.')));
+        self::assertFalse(Orion_Routing_Rules::preparation_role_needed('cleaner',array('notes'=>'The wall has cracks and two holes.')));
+        self::assertTrue(Orion_Routing_Rules::preparation_role_needed('sandpaper',array('notes'=>'The previous coating is flaking.')));
+        self::assertTrue(Orion_Routing_Rules::preparation_role_needed('scraper',array('notes'=>'The previous coating is peeling.')));
+        self::assertTrue(Orion_Routing_Rules::preparation_role_needed('primer',array('surface'=>'new plaster')));
+    }
 }

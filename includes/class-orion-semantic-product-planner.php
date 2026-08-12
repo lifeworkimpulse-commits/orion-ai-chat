@@ -21,7 +21,7 @@ final class Orion_Semantic_Product_Planner {
             $role = Orion_Role_Registry::canonical_for_query((string)($item['role'] ?? ''), $query);
             if (!Orion_Role_Registry::supported($role)) { continue; }
             $required = !empty($item['required']); $requirements = is_array($item['requirements'] ?? null) ? $item['requirements'] : array();
-            if ($this->defer_conditional($role, $state, $plan_count)) {
+            if (!$required && $this->defer_conditional($role, $state, $plan_count)) {
                 $conditional_roles[] = $role; $groups[] = array('role'=>$role,'required'=>false,'conditional'=>true,'requirements'=>$requirements,'candidates'=>array()); continue;
             }
             $limit = 'roller' === $role ? 8 : ($required ? 8 : 6); $found = $this->search_candidates($item, $role, $state, $limit); $ids = array(); $group_candidates = array();
@@ -239,8 +239,7 @@ final class Orion_Semantic_Product_Planner {
     }
     private function defer_conditional(string $role,array $state,int $plan_count): bool {
         if ($plan_count <= 1 || !in_array($role,array('primer','cleaner','filler','sandpaper','scraper'),true)) { return false; }
-        if ('cleaner' === $role && Orion_Routing_Rules::is_floor_project($state)) { return false; }
-        return !Orion_Routing_Rules::has_surface_condition($state);
+        return !Orion_Routing_Rules::preparation_role_needed($role,$state);
     }
     private function priority(array $product): int { $values = array_map(static fn($role)=>Orion_Role_Registry::priority((string)$role),(array)($product['kit_roles'] ?? array($product['kit_role'] ?? ''))); return $values ? min($values) : 80; }
     private function empty_result(string $status): array { return array('products'=>array(),'missing_roles'=>array(),'conditional_roles'=>array(),'plan'=>array(),'diagnostic'=>array('status'=>$status)); }
