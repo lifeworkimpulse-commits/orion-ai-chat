@@ -1,12 +1,169 @@
 <?php
-if(!defined('ABSPATH')){exit;}
-final class Orion_Intent_Classifier{
- public function classify(string $message,array $history,array $state,array $settings):array{$resolved=$this->resolve_pending($message,$history,$state);if($resolved)return$resolved;$policy=$this->deterministic_store_policy($message);if($policy)return$policy;$provider=Orion_AI_Provider_Factory::create($settings,'routing');$fallback=$this->fallback();$system='You are a semantic router for a WooCommerce shopping assistant. Understand meaning, paraphrases and conversation context. Call route_request exactly once. Treat short messages as answers to saved_state.pending_clarifications. Preserve the active project for answers; do not create a new topic or manager handoff. Ask at most three questions and only when missing information materially changes suitability, safety or quantity. Never calculate area_m2 until the dimension unit is known. Store numeric dimensions in dimension_length and dimension_width, with dimension_unit m or ft. Product search roles must be actual catalogue product functions such as primary_coating, primer, cleaner, filler, roller, brush or tray. When the user asks for everything needed, a complete kit or all materials, include relevant preparation and application product roles in search_plan. For a complete painting kit, prioritise primary_coating, roller, brush, tray, masking_tape and, unless the project surface is a floor, dust_sheet before conditional preparation roles. Only the principal material may be required by default. Primer, filler, cleaner, roller, brush, tray, masking tape, dust sheet, sandpaper and scraper must remain optional unless the user asks for that exact product as the primary request. Never use personas or services such as researcher, specialist, analyst, installer or cost analysis as product roles. Questions about whether an order, product or pallet can be delivered, shipped, sent, collected or taken to a city, area or postcode are store_policy, not product_search. For store policies use policy_query and no product plan. Use manager_follow_up only when meaning cannot safely be determined from message, history and pending questions.';$tool=array('type'=>'function','function'=>array('name'=>'route_request','description'=>'Return the semantic route.','parameters'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array('intent'=>array('type'=>'string','enum'=>array('project_recommendation','product_search','store_policy','general','manager_follow_up')),'topic'=>array('type'=>'string'),'is_new_topic'=>array('type'=>'boolean'),'confidence'=>array('type'=>'number'),'needs_clarification'=>array('type'=>'boolean'),'clarifying_questions'=>array('type'=>'array','items'=>array('type'=>'string'),'maxItems'=>3),'policy_query'=>array('type'=>'string'),'state_patch'=>array('type'=>'object','properties'=>array('project_type'=>array('type'=>'string'),'surface'=>array('type'=>'string'),'area_m2'=>array('type'=>'number'),'environment'=>array('type'=>'string'),'traffic'=>array('type'=>'string'),'colour'=>array('type'=>'string'),'finish'=>array('type'=>'string'),'dimensions'=>array('type'=>'string'),'dimension_length'=>array('type'=>'number'),'dimension_width'=>array('type'=>'number'),'dimension_unit'=>array('type'=>'string'),'notes'=>array('type'=>'string'))),'search_plan'=>array('type'=>'array','maxItems'=>10,'items'=>array('type'=>'object','properties'=>array('role'=>array('type'=>'string','enum'=>array('primary_coating','primary_product','primer','cleaner','filler','roller','brush','tray','masking_tape','dust_sheet','sandpaper','scraper','fixings','trim','tools','protection')),'query'=>array('type'=>'string'),'required'=>array('type'=>'boolean'),'requirements'=>array('type'=>'object')),'required'=>array('role','query','required')))),'required'=>array('intent','topic','is_new_topic','confidence','needs_clarification','clarifying_questions','policy_query','state_patch','search_plan'))));$context=array('saved_state'=>$state,'recent_messages'=>array_slice($history,-8),'current_message'=>$message);$result=$provider->chat(array(array('role'=>'system','content'=>$system),array('role'=>'user','content'=>wp_json_encode($context))),array($tool));if(empty($result['ok'])){$fallback['_diagnostic']=array('status'=>'provider_error','error'=>sanitize_text_field((string)($result['error']??'Unknown provider error')));return$fallback;}$data=null;$calls=$result['message']['tool_calls']??array();if($calls)$data=json_decode((string)($calls[0]['function']['arguments']??'{}'),true);if(!is_array($data))$data=$this->decode((string)($result['message']['content']??''));if(!is_array($data)){$fallback['_diagnostic']=array('status'=>'invalid_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content']??'')),0,500));return$fallback;}$out=$this->validate($data,$fallback);if(in_array($out['intent'],array('project_recommendation','product_search'),true))foreach($this->extract_dimensions($message)as$k=>$v)if(!isset($out['state_patch'][$k]))$out['state_patch'][$k]=$v;$out['_diagnostic']=array('status'=>'ok','usage'=>$result['usage']??array(),'attempts'=>$result['attempts']??array(),'fallback_used'=>!empty($result['fallback_used']));return$out;}
- private function deterministic_store_policy(string $message):?array{$text=mb_strtolower(trim($message));$postcode=(bool)preg_match('/\b(?:gir\s*0aa|[a-z]{1,2}\d[a-z\d]?(?:\s*\d[a-z]{2})?)\b/i',$text);$action=(bool)preg_match('/\b(deliver|delivered|delivering|ship|shipped|send|sent|dispatch|dispatched|courier|collect|collected|pick[\s-]?up)\b/i',$text);$noun=(bool)preg_match('/\b(delivery|shipping|collection)\b/i',$text);$destination=(bool)preg_match('/\b(?:to|into|within)\s+(?:the\s+)?[a-z0-9][a-z0-9 .-]{0,50}(?:\?|$)/i',$text);$implicit=(bool)preg_match('/\b(?:can|could|will|would|do)\s+you\s+(?:get|bring|take)\b.{0,80}\bto\b/i',$text);$policy_form=(bool)preg_match('/\b(?:do|can|could|will|would)\s+(?:you|this|the|my|an?\s+order)\b/i',$text);$service=(bool)preg_match('/\b(?:delivery|shipping|collection)\s+(?:area|areas|available|availability|option|options|policy|cost|charge|charges|postcode|service)\b/i',$text);if(!(($action&&($postcode||$destination||$policy_form))||($noun&&($postcode||$destination))||$service||($implicit&&($postcode||$destination))))return null;$out=$this->fallback();$out['intent']='store_policy';$out['topic']='delivery';$out['is_new_topic']=true;$out['confidence']=1.0;$out['policy_query']=sanitize_text_field($message);$out['_diagnostic']=array('status'=>'deterministic_store_policy_routing','signals'=>array('postcode'=>$postcode,'action'=>$action,'destination'=>$destination,'implicit'=>$implicit,'service'=>$service));return$out;}
- private function resolve_pending(string $message,array $history,array $state):?array{$pending=is_array($state['pending_clarifications']??null)?$state['pending_clarifications']:array();if(!$pending)return null;$text=strtolower(trim($message));$patch=array();if(preg_match('/^(m|metre|metres|meter|meters)(\b|[ ,])/i',$text))$patch['dimension_unit']='m';elseif(preg_match('/^(ft|foot|feet)(\b|[ ,])/i',$text))$patch['dimension_unit']='ft';foreach(array('concrete','painted concrete','epoxy','wood','plaster','masonry','brick','metal')as$surface)if(str_contains($text,$surface)){$patch['surface']=$surface;break;}if(!$patch)return null;$dims=array();foreach(array_reverse($history)as$item){if(($item['role']??'')!=='user')continue;$dims=$this->extract_dimensions((string)($item['content']??''));if($dims)break;}foreach($dims as$k=>$v)if(!isset($patch[$k]))$patch[$k]=$v;$remaining=array();foreach($pending as$q){$low=strtolower((string)$q);$resolved=(preg_match('/met(er|re)|feet|foot|\bft\b/',$low)&&isset($patch['dimension_unit']))||(preg_match('/surface|substrate|made of/',$low)&&isset($patch['surface']));if(!$resolved)$remaining[]=sanitize_text_field((string)$q);}$out=$this->fallback();$out['intent']=$state['active_intent']??'project_recommendation';$out['topic']=$state['active_topic']??'project';$out['confidence']=1.0;$out['needs_clarification']=!empty($remaining);$out['clarifying_questions']=$remaining;$out['state_patch']=$patch;$out['search_plan']=is_array($state['pending_search_plan']??null)?$state['pending_search_plan']:array();$out['_diagnostic']=array('status'=>'deterministic_clarification_resolution','resolved_fields'=>array_keys($patch));return$out;}
- private function extract_dimensions(string $text):array{$map=array('one'=>1,'two'=>2,'three'=>3,'four'=>4,'five'=>5,'six'=>6,'seven'=>7,'eight'=>8,'nine'=>9,'ten'=>10,'eleven'=>11,'twelve'=>12);$normal=strtolower($text);foreach($map as$word=>$number)$normal=preg_replace('/\b'.preg_quote($word,'/').'\b/',(string)$number,$normal);if(!preg_match('/\b(\d+(?:\.\d+)?)\s*(?:x|by|×)\s*(\d+(?:\.\d+)?)/i',$normal,$m))return array();$out=array('dimension_length'=>(float)$m[1],'dimension_width'=>(float)$m[2],'dimensions'=>$m[1].'x'.$m[2]);if(preg_match('/\b(m|metres?|meters?)\b/i',$normal))$out['dimension_unit']='m';elseif(preg_match('/\b(ft|feet|foot)\b/i',$normal))$out['dimension_unit']='ft';return$out;}
- private function fallback():array{return array('intent'=>'manager_follow_up','topic'=>'unclassified','is_new_topic'=>false,'confidence'=>0.0,'needs_clarification'=>false,'clarifying_questions'=>array(),'policy_query'=>'','state_patch'=>array(),'search_plan'=>array(),'_diagnostic'=>array('status'=>'fallback'));}
- private function validate(array $data,array $out):array{$allowed=array('project_recommendation','product_search','store_policy','general','manager_follow_up');$out['intent']=in_array($data['intent']??'',$allowed,true)?$data['intent']:'manager_follow_up';$out['topic']=sanitize_key((string)($data['topic']??''));$out['is_new_topic']=!empty($data['is_new_topic']);$out['confidence']=max(0,min(1,(float)($data['confidence']??0)));$out['needs_clarification']=!empty($data['needs_clarification']);$out['policy_query']=sanitize_text_field((string)($data['policy_query']??''));$questions=is_array($data['clarifying_questions']??null)?$data['clarifying_questions']:array();$out['clarifying_questions']=array_slice(array_values(array_filter(array_map(static fn($v)=>sanitize_text_field((string)$v),$questions))),0,3);$allowed_state=array('project_type','surface','area_m2','environment','traffic','colour','finish','dimensions','dimension_length','dimension_width','dimension_unit','notes');$patch=is_array($data['state_patch']??null)?$data['state_patch']:array();foreach($allowed_state as$key)if(array_key_exists($key,$patch)&&$patch[$key]!==''&&$patch[$key]!==null)$out['state_patch'][$key]=is_numeric($patch[$key])?(float)$patch[$key]:sanitize_text_field((string)$patch[$key]);if((isset($out['state_patch']['dimension_length'])||isset($out['state_patch']['dimension_width']))&&empty($out['state_patch']['dimension_unit']))unset($out['state_patch']['area_m2']);$plan=is_array($data['search_plan']??null)?$data['search_plan']:array();$optional_roles=array('primer','filler','cleaner','roller','brush','tray','masking_tape','dust_sheet','sandpaper','scraper','tool');foreach(array_slice($plan,0,10)as$item){if(!is_array($item))continue;$role=$this->canonical_role((string)($item['role']??''));$query=sanitize_text_field((string)($item['query']??''));if(!$role||!$query||preg_match('/research|specialist|analyst|consult|installer|cost/',$role))continue;$requirements=is_array($item['requirements']??null)?$item['requirements']:array();$clean=array();foreach(array_slice($requirements,0,10,true)as$k=>$v)$clean[sanitize_key((string)$k)]=sanitize_text_field(is_scalar($v)?(string)$v:wp_json_encode($v));$out['search_plan'][]=array('role'=>$role,'query'=>$query,'required'=>!empty($item['required'])&&!in_array($role,$optional_roles,true),'requirements'=>$clean);}$state_text=strtolower(implode(' ',array_map('strval',array_filter($out['state_patch'],'is_scalar'))));if(preg_match('/\b(floor|garage)\b/',$state_text))$out['search_plan']=array_values(array_filter($out['search_plan'],static fn($item)=>($item['role']??'')!=='dust_sheet'));if($out['intent']==='product_search'&&(!empty($out['state_patch']['project_type'])||isset($out['state_patch']['area_m2']))&&count($out['search_plan'])>1)$out['intent']='project_recommendation';return$out;}
- private function canonical_role(string $role):string{$key=sanitize_key($role);$compact=preg_replace('/[^a-z0-9]/','',$key);$map=array('primarycoating'=>'primary_coating','primaryproduct'=>'primary_product','mainpaint'=>'primary_coating','maskingtape'=>'masking_tape','masking'=>'masking_tape','dustsheet'=>'dust_sheet','rollerframe'=>'roller','rollersleeve'=>'roller','sleeve'=>'roller','frame'=>'roller');return$map[$compact]??$key;}
- private function decode(string $text):?array{$text=trim(preg_replace('/^```(?:json)?\s*|\s*```$/i','',trim($text)));$data=json_decode($text,true);if(is_array($data))return$data;if(preg_match('/\{[\s\S]*\}/',$text,$m)){$data=json_decode($m[0],true);return is_array($data)?$data:null;}return null;}
+if (!defined('ABSPATH')) { exit; }
+
+final class Orion_Intent_Classifier {
+    public function classify(string $message, array $history, array $state, array $settings): array {
+        $resolved = $this->resolve_pending($message, $history, $state);
+        if ($resolved) { return $resolved; }
+        $policy = $this->deterministic_store_policy($message);
+        if ($policy) { return $policy; }
+        $provider = Orion_AI_Provider_Factory::create($settings, 'routing');
+        $fallback = $this->fallback();
+        $system = 'You are a semantic router for a WooCommerce shopping assistant. Call route_request exactly once. Preserve active project context for short answers. Ask at most three questions and only when missing information materially changes suitability, safety or quantity. Never calculate area_m2 until the dimension unit is known. Use only the supported catalogue roles. For complete painting kits prioritise the principal material, roller, tray, brush, masking tape and floor-appropriate protection before conditional preparation roles. Only the principal material may be required by default. Questions about delivery, shipping, collection, a destination or postcode are store_policy. Never use personas or services as product roles.';
+        $tool = array('type'=>'function','function'=>array(
+            'name'=>'route_request','description'=>'Return the semantic route.',
+            'parameters'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array(
+                'intent'=>array('type'=>'string','enum'=>array('project_recommendation','product_search','store_policy','general','manager_follow_up')),
+                'topic'=>array('type'=>'string'),'is_new_topic'=>array('type'=>'boolean'),'confidence'=>array('type'=>'number'),
+                'needs_clarification'=>array('type'=>'boolean'),'clarifying_questions'=>array('type'=>'array','items'=>array('type'=>'string'),'maxItems'=>3),
+                'policy_query'=>array('type'=>'string'),
+                'state_patch'=>array('type'=>'object','properties'=>array(
+                    'project_type'=>array('type'=>'string'),'surface'=>array('type'=>'string'),'area_m2'=>array('type'=>'number'),
+                    'environment'=>array('type'=>'string'),'traffic'=>array('type'=>'string'),'colour'=>array('type'=>'string'),
+                    'finish'=>array('type'=>'string'),'dimensions'=>array('type'=>'string'),'dimension_length'=>array('type'=>'number'),
+                    'dimension_width'=>array('type'=>'number'),'dimension_unit'=>array('type'=>'string'),'notes'=>array('type'=>'string'),
+                )),
+                'search_plan'=>array('type'=>'array','maxItems'=>10,'items'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array(
+                    'role'=>array('type'=>'string','enum'=>Orion_Role_Registry::all()),'query'=>array('type'=>'string'),
+                    'required'=>array('type'=>'boolean'),'requirements'=>array('type'=>'object'),
+                ),'required'=>array('role','query','required'))),
+            ),'required'=>array('intent','topic','is_new_topic','confidence','needs_clarification','clarifying_questions','policy_query','state_patch','search_plan')),
+        ));
+        $context = array('saved_state'=>$state,'recent_messages'=>array_slice($history,-8),'current_message'=>$message);
+        $result = $provider->chat(array(array('role'=>'system','content'=>$system),array('role'=>'user','content'=>wp_json_encode($context))), array($tool));
+        if (empty($result['ok'])) {
+            $fallback['_diagnostic'] = array('status'=>'provider_error','error'=>sanitize_text_field((string)($result['error'] ?? 'Unknown provider error')));
+            return $fallback;
+        }
+        $data = null; $calls = $result['message']['tool_calls'] ?? array();
+        if ($calls) { $data = json_decode((string)($calls[0]['function']['arguments'] ?? '{}'), true); }
+        if (!is_array($data)) { $data = $this->decode((string)($result['message']['content'] ?? '')); }
+        if (!is_array($data)) {
+            $fallback['_diagnostic'] = array('status'=>'invalid_output','tool_calls'=>count($calls),'content_excerpt'=>mb_substr(sanitize_textarea_field((string)($result['message']['content'] ?? '')),0,500));
+            return $fallback;
+        }
+        $out = $this->validate($data, $fallback);
+        if (in_array($out['intent'], array('project_recommendation','product_search'), true)) {
+            foreach (Orion_Routing_Rules::extract_dimensions($message) as $key => $value) { if (!isset($out['state_patch'][$key])) { $out['state_patch'][$key] = $value; } }
+        }
+        $out['_diagnostic'] = array('status'=>'ok','usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'fallback_used'=>!empty($result['fallback_used']));
+        return $out;
+    }
+
+    private function deterministic_store_policy(string $message): ?array {
+        $signals = Orion_Routing_Rules::delivery_policy_signals($message);
+        if (!$signals) { return null; }
+        $out = $this->fallback();
+        $out['intent'] = 'store_policy'; $out['topic'] = 'delivery'; $out['is_new_topic'] = true; $out['confidence'] = 1.0;
+        $out['policy_query'] = sanitize_text_field($message);
+        $out['_diagnostic'] = array('status'=>'deterministic_store_policy_routing','signals'=>$signals);
+        return $out;
+    }
+
+    private function resolve_pending(string $message, array $history, array $state): ?array {
+        $pending = is_array($state['pending_clarifications'] ?? null) ? $state['pending_clarifications'] : array();
+        if (!$pending) { return null; }
+        $text = strtolower(trim($message)); $patch = array();
+        if (preg_match('/^(m|metre|metres|meter|meters)(\b|[ ,])/i', $text)) { $patch['dimension_unit'] = 'm'; }
+        elseif (preg_match('/^(ft|foot|feet)(\b|[ ,])/i', $text)) { $patch['dimension_unit'] = 'ft'; }
+        foreach (array('painted concrete','concrete','epoxy','wood','plaster','masonry','brick','metal') as $surface) {
+            if (str_contains($text, $surface)) { $patch['surface'] = $surface; break; }
+        }
+        if (!$patch) { return null; }
+        $dimensions = array();
+        foreach (array_reverse($history) as $item) {
+            if (($item['role'] ?? '') !== 'user') { continue; }
+            $dimensions = Orion_Routing_Rules::extract_dimensions((string)($item['content'] ?? ''));
+            if ($dimensions) { break; }
+        }
+        foreach ($dimensions as $key => $value) { if (!isset($patch[$key])) { $patch[$key] = $value; } }
+        $remaining = array();
+        foreach ($pending as $question) {
+            $low = strtolower((string)$question);
+            $answered = (preg_match('/met(er|re)|feet|foot|\bft\b/', $low) && isset($patch['dimension_unit'])) || (preg_match('/surface|substrate|made of/', $low) && isset($patch['surface']));
+            if (!$answered) { $remaining[] = sanitize_text_field((string)$question); }
+        }
+        $out = $this->fallback();
+        $out['intent'] = $state['active_intent'] ?? 'project_recommendation'; $out['topic'] = $state['active_topic'] ?? 'project'; $out['confidence'] = 1.0;
+        $out['needs_clarification'] = !empty($remaining); $out['clarifying_questions'] = $remaining; $out['state_patch'] = $patch;
+        $out['search_plan'] = is_array($state['pending_search_plan'] ?? null) ? $state['pending_search_plan'] : array();
+        $out['_diagnostic'] = array('status'=>'deterministic_clarification_resolution','resolved_fields'=>array_keys($patch));
+        return $out;
+    }
+
+    private function validate(array $data, array $out): array {
+        $allowed_intents = array('project_recommendation','product_search','store_policy','general','manager_follow_up');
+        $out['intent'] = in_array($data['intent'] ?? '', $allowed_intents, true) ? $data['intent'] : 'manager_follow_up';
+        $out['topic'] = sanitize_key((string)($data['topic'] ?? '')); $out['is_new_topic'] = !empty($data['is_new_topic']);
+        $out['confidence'] = max(0, min(1, (float)($data['confidence'] ?? 0))); $out['needs_clarification'] = !empty($data['needs_clarification']);
+        $out['policy_query'] = sanitize_text_field((string)($data['policy_query'] ?? ''));
+        $questions = is_array($data['clarifying_questions'] ?? null) ? $data['clarifying_questions'] : array();
+        $out['clarifying_questions'] = array_slice(array_values(array_filter(array_map(static fn($value)=>sanitize_text_field((string)$value), $questions))),0,3);
+        $allowed_state = array('project_type','surface','area_m2','environment','traffic','colour','finish','dimensions','dimension_length','dimension_width','dimension_unit','notes');
+        $patch = is_array($data['state_patch'] ?? null) ? $data['state_patch'] : array();
+        foreach ($allowed_state as $key) {
+            if (!array_key_exists($key, $patch) || $patch[$key] === '' || $patch[$key] === null) { continue; }
+            $value = is_numeric($patch[$key]) ? (float)$patch[$key] : sanitize_text_field((string)$patch[$key]);
+            if ('surface' === $key && is_string($value)) { $value = $this->canonical_surface($value); }
+            $out['state_patch'][$key] = $value;
+        }
+        if ((isset($out['state_patch']['dimension_length']) || isset($out['state_patch']['dimension_width'])) && empty($out['state_patch']['dimension_unit'])) { unset($out['state_patch']['area_m2']); }
+        $plan = is_array($data['search_plan'] ?? null) ? $data['search_plan'] : array();
+        foreach (array_slice($plan,0,10) as $item) {
+            if (!is_array($item)) { continue; }
+            $query = sanitize_text_field((string)($item['query'] ?? ''));
+            $role = Orion_Role_Registry::canonical_for_query((string)($item['role'] ?? ''), $query);
+            if (!Orion_Role_Registry::supported($role) || !$query) { continue; }
+            $requirements = is_array($item['requirements'] ?? null) ? $item['requirements'] : array(); $clean = array();
+            foreach (array_slice($requirements,0,10,true) as $key => $value) { $clean[sanitize_key((string)$key)] = sanitize_text_field(is_scalar($value) ? (string)$value : wp_json_encode($value)); }
+            $out['search_plan'][] = array('role'=>$role,'query'=>$query,'required'=>!empty($item['required']) && !Orion_Role_Registry::optional($role),'requirements'=>$clean);
+        }
+        $combined_state = array_merge($out['state_patch'], array('project_type'=>$out['state_patch']['project_type'] ?? $out['topic']));
+        $out['search_plan'] = $this->normalise_plan($out['search_plan'], $combined_state);
+        if ($out['intent'] === 'product_search' && (!empty($out['state_patch']['project_type']) || isset($out['state_patch']['area_m2'])) && count($out['search_plan']) > 1) { $out['intent'] = 'project_recommendation'; }
+        return $out;
+    }
+
+    private function normalise_plan(array $plan, array $state): array {
+        $out = array(); $seen = array(); $floor = Orion_Routing_Rules::is_floor_project($state);
+        foreach ($plan as $item) {
+            $role = (string)($item['role'] ?? '');
+            if ('dust_sheet' === $role && $floor) { continue; }
+            if (!Orion_Role_Registry::supported($role) || isset($seen[$role])) { continue; }
+            $out[] = $item; $seen[$role] = true;
+        }
+        $complete = Orion_Routing_Rules::wants_complete_kit($state) || count($out) >= 6;
+        if ($complete && (isset($seen['primary_coating']) || isset($seen['primary_product']))) {
+            $surface = sanitize_text_field((string)($state['surface'] ?? 'painted surface'));
+            $core = array(
+                'roller'=>'complete paint roller system with frame and sleeve for '.$surface,
+                'tray'=>'paint roller tray compatible with the selected roller',
+                'brush'=>'paint brush for cutting in '.$surface,
+                'masking_tape'=>'decorators masking tape for protecting edges',
+            );
+            if ($floor) { $core['cleaner'] = 'floor cleaner or degreaser for coating preparation'; }
+            else { $core['dust_sheet'] = 'protective dust sheet for painting'; }
+            foreach ($core as $role => $query) {
+                if (!isset($seen[$role])) { $out[] = array('role'=>$role,'query'=>$query,'required'=>false,'requirements'=>array('surface'=>$surface)); $seen[$role] = true; }
+            }
+        }
+        usort($out,static fn($first,$second)=>Orion_Role_Registry::priority((string)($first['role'] ?? ''))<=>Orion_Role_Registry::priority((string)($second['role'] ?? '')));
+        return array_slice($out,0,10);
+    }
+
+    private function canonical_surface(string $surface): string {
+        $surface = strtolower(trim($surface));
+        if (str_contains($surface,'painted concrete')) { return 'painted concrete'; }
+        if (str_contains($surface,'concrete')) { return 'concrete'; }
+        foreach (array('ceiling','wall','plaster','masonry','brick','wood','timber','metal','tile') as $known) { if (str_contains($surface,$known)) { return $known; } }
+        return sanitize_text_field($surface);
+    }
+
+    private function fallback(): array { return array('intent'=>'manager_follow_up','topic'=>'unclassified','is_new_topic'=>false,'confidence'=>0.0,'needs_clarification'=>false,'clarifying_questions'=>array(),'policy_query'=>'','state_patch'=>array(),'search_plan'=>array(),'_diagnostic'=>array('status'=>'fallback')); }
+    private function decode(string $text): ?array {
+        $text = trim((string) preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($text))); $data = json_decode($text, true);
+        if (is_array($data)) { return $data; }
+        if (preg_match('/\{[\s\S]*\}/', $text, $matches)) { $data = json_decode($matches[0], true); return is_array($data) ? $data : null; }
+        return null;
+    }
 }

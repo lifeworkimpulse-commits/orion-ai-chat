@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/bootstrap.php" colors="true" failOnWarning="true">
+  <testsuites><testsuite name="Orion AI unit tests">
+    <file>tests/test-role-registry.php</file>
+    <file>tests/test-routing-rules.php</file>
+    <file>tests/test-product-facts.php</file>
+    <file>tests/test-kit-validator.php</file>
+  </testsuite></testsuites>
+</phpunit>

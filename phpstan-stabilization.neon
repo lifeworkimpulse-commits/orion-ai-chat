@@ -1,0 +1,10 @@
+includes:
+  - vendor/szepeviktor/phpstan-wordpress/extension.neon
+parameters:
+  level: 5
+  paths:
+    - includes/class-orion-role-registry.php
+    - includes/class-orion-routing-rules.php
+    - includes/class-orion-product-facts.php
+    - includes/class-orion-kit-validator.php
+  treatPhpDocTypesAsCertain: false

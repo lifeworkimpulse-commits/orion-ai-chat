@@ -248,6 +248,22 @@
         actions.appendChild(add);
       }
       content.append(name, price, stock, actions);
+      const categoryLinks = Array.isArray(product.category_links)
+        ? product.category_links.filter(category => category && category.name && category.url)
+        : [];
+      if (categoryLinks.length) {
+        const category = document.createElement('small');
+        category.className = 'orion-ai-product-category';
+        category.appendChild(document.createTextNode('Category: '));
+        categoryLinks.forEach((item, index) => {
+          if (index) category.appendChild(document.createTextNode(' · '));
+          const link = document.createElement('a');
+          link.href = item.url;
+          link.textContent = item.name;
+          category.appendChild(link);
+        });
+        content.appendChild(category);
+      }
       card.append(image, content);
       grid.appendChild(card);
     });

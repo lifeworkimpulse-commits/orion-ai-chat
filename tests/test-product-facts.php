@@ -1,0 +1,30 @@
+<?php
+use PHPUnit\Framework\TestCase;
+final class Orion_Product_Facts_Test extends TestCase {
+    private Orion_Product_Facts $facts;
+    protected function setUp(): void { $this->facts=new Orion_Product_Facts(); }
+    public function test_frame_description_does_not_prove_included_sleeve(): void {
+        $product=array('name'=>'9" Roller Cage Frame','description'=>'Compatible with 9 inch roller sleeves','categories'=>array('Rollers & Brushes'));
+        self::assertSame('frame',$this->facts->roller_component($product)['kind']);
+    }
+    public function test_explicit_set_is_complete(): void {
+        $product=array('name'=>'9 inch 13pc Roller & Frame Set','description'=>'Includes frame and two sleeves','categories'=>array('Rollers & Brushes')); $facts=$this->facts->extract($product);
+        self::assertSame('complete',$facts['roller_component']); self::assertSame(9.0,$facts['roller_width_inches']); self::assertTrue($facts['is_bundle']);
+    }
+    public function test_roller_set_is_not_assumed_to_include_a_tray(): void {
+        $product=array('name'=>'9" Tiger Stripe 2 Sleeve Roller Set','description'=>'Two roller sleeves for decorating','categories'=>array('Paint Trays','Rollers & Brushes')); $facts=$this->facts->extract($product);
+        self::assertNotContains('tray',$facts['functions']);
+    }
+    public function test_explicitly_included_tray_is_detected(): void {
+        $product=array('name'=>'9" Complete Roller Kit','description'=>'Includes roller frame, sleeves and tray','categories'=>array('Rollers & Brushes')); $facts=$this->facts->extract($product);
+        self::assertContains('tray',$facts['functions']);
+    }
+    public function test_structured_product_functions_are_extracted(): void {
+        $product=array('name'=>'Heavy Duty Floor Paint Grey 5L','description'=>'Suitable for concrete garage floors. Coverage 8 m2 per litre.','categories'=>array('Floor Paint')); $facts=$this->facts->extract($product);
+        self::assertContains('primary_coating',$facts['functions']); self::assertContains('floor',$facts['surfaces']); self::assertSame(8.0,$facts['coverage_m2_per_litre']); self::assertSame(5.0,$facts['pack_volume_litres']);
+    }
+    public function test_multi_pack_volume_is_totalled_without_inventing_coverage(): void {
+        $product=array('name'=>'Contract Matt 2 x 10L Bundle','description'=>'White trade paint','categories'=>array('Paint')); $facts=$this->facts->extract($product);
+        self::assertSame(20.0,$facts['pack_volume_litres']); self::assertNull($facts['coverage_m2_per_litre']);
+    }
+}
