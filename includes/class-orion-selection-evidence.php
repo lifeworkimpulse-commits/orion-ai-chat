@@ -15,7 +15,7 @@ final class Orion_Selection_Evidence {
             if (in_array($field, self::FIELDS, true)) { $fields[] = $field; }
         }
         $fields = array_values(array_unique($fields));
-        $confidence = strtolower(trim((string) ($choice['confidence'] ?? 'low'));
+        $confidence = strtolower(trim((string) ($choice['confidence'] ?? 'low')));
         if (!in_array($confidence, self::CONFIDENCE, true)) { $confidence = 'low'; }
         return array(
             'evidence_fields' => $fields,
