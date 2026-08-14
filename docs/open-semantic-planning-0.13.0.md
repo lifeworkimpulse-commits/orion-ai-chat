@@ -13,7 +13,7 @@ AI decides relevance. Deterministic code verifies evidence and live catalogue tr
 1. Classify the conversation and collect only information that materially changes product suitability.
 2. Produce an open product-need plan. Each need has a free-form key, description, required flag, constraints and an optional known-role hint.
 3. Retrieve live candidates using title, description, categories, tags and attributes. Known role aliases may improve recall but must not gate unknown needs.
-4. Ask the AI to rerank only retrieved product IDs and cite the catalogue fields supporting each choice.
+4. Ask the AI to rerank only retrieved product IDs and identify the exact catalogue fields supporting each choice.
 5. Optionally inspect images for a small number of ambiguous candidates when vision is supported. Image evidence is secondary and cannot prove coverage, instructions or hidden bundle contents.
 6. Revalidate product existence, visibility, stock, price and supported claims before returning cards.
 7. Ask a clarification question or report uncertainty when evidence is insufficient.
@@ -22,6 +22,7 @@ AI decides relevance. Deterministic code verifies evidence and live catalogue tr
 
 - Security, permissions, rate limits and session handling.
 - Live WooCommerce ID, visibility, stock and purchasability checks.
+- Candidate-set membership for every selected need.
 - No invented prices, links, coverage, delivery policies or product IDs.
 - Explicit bundle/component and dimensional compatibility validation when a compatibility claim is made.
 - Product-card limits, traceability and provider fallback.
@@ -43,11 +44,14 @@ AI decides relevance. Deterministic code verifies evidence and live catalogue tr
 - Normalized classification output exposes the open plan as `needs` while retaining `search_plan` as a compatibility alias.
 - Unknown need keys continue into catalogue retrieval rather than being discarded.
 
-### Stage 2 — Open retrieval and reranking
+### Stage 2 — Open retrieval and reranking — implemented
 
-- Search every need without rejecting unknown role names.
-- Require selected IDs to come from that need's candidate set.
-- Return evidence fields and uncertainty per selection.
+- Every need receives an independent live candidate set.
+- Unknown need keys use the same title, description, category and attribute retrieval path as known roles.
+- The selector can choose only product IDs retrieved for that exact need.
+- Every AI selection must identify explicit supporting catalogue fields and have high or medium confidence.
+- Low-confidence or unsupported choices are rejected and reported as missing needs.
+- Selection reasons, evidence fields and uncertainty are preserved on the verified product and in traces.
 
 ### Stage 3 — Generic validation
 

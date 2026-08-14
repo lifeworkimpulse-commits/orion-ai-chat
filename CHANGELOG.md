@@ -6,7 +6,9 @@
 - Bumped the plugin development version to `0.13.0`; the database schema remains `0.9.0` because this initialization does not change storage.
 - Opened the semantic need contract so the AI can create safe free-form product need keys instead of choosing from a closed canonical-role enum.
 - Preserved known roles as optional hints for specialist validators, ordering and the existing `0.12.0` compatibility layer.
-- Added trace metadata and regression coverage for known and previously unseen need keys.
+- Added per-need live catalogue candidate groups for known and previously unseen product types.
+- Required the AI selector to identify explicit catalogue evidence fields and use high or medium confidence before a product can be accepted.
+- Added selection uncertainty, missing-needs diagnostics and deterministic evidence records for known compatibility recovery.
 - Kept deterministic validation as a safety and evidence layer rather than a catalogue-domain decision engine.
 - Planned optional image-assisted reranking for textually ambiguous products.
 

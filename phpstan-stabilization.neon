@@ -6,5 +6,6 @@ parameters:
     - includes/class-orion-role-registry.php
     - includes/class-orion-routing-rules.php
     - includes/class-orion-product-facts.php
+    - includes/class-orion-selection-evidence.php
     - includes/class-orion-kit-validator.php
   treatPhpDocTypesAsCertain: false
