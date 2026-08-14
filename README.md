@@ -4,7 +4,9 @@ Private WooCommerce plugin that provides a grounded AI shopping assistant throug
 
 ## Current development version
 
-`0.12.0` is the stabilization release. It centralizes semantic role contracts, extracts structured product facts, isolates deterministic routing and kit validation, and adds permanent unit-test CI.
+`0.13.0` is the open semantic planning development line. It starts from the unmerged `0.12.0` stabilization baseline and moves product planning from a closed role list toward AI-generated needs, open catalogue retrieval and evidence-based ranking.
+
+The `0.12.0` pull request remains draft and is not merged.
 
 ## Requirements
 
@@ -48,15 +50,15 @@ wp orion-ai catalogue-audit --details
 wp orion-ai evaluate --provider=openrouter --model=<model>
 ```
 
-## Architecture
+## Architecture direction
 
-- `Orion_Role_Registry`: canonical product-role contract and priorities.
-- `Orion_Routing_Rules`: deterministic delivery, dimension and project-state rules.
-- `Orion_Product_Facts`: normalized functions, surfaces, components, widths and coverage evidence.
-- `Orion_Kit_Validator`: complete roller systems and tray compatibility.
-- `Orion_Semantic_Product_Planner`: retrieval, structured AI selection and live-product validation.
+- AI produces an open list of project needs from arbitrary customer language.
+- Known roles remain optional hints and validator hooks, not a closed allowlist.
+- Live WooCommerce title, description, category and attributes drive retrieval and ranking.
+- Images may be used as secondary evidence when the configured provider supports vision.
+- Deterministic code remains responsible for live IDs, stock, price, explicit compatibility evidence and unsupported-claim prevention.
 
-See `docs/stabilization-0.12.0.md` for release scope and rollout gates.
+See `docs/open-semantic-planning-0.13.0.md` for the development scope and migration plan.
 
 ## Privacy
 

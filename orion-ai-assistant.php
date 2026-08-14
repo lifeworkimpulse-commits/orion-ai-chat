@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Orion AI Shopping Assistant
  * Description: Semantic WooCommerce AI assistant powered by OpenRouter or Google Gemini.
- * Version: 0.12.0
+ * Version: 0.13.0
  * Author: Orion Supplies
  * Requires at least: 6.2
  * Requires PHP: 8.0
@@ -12,7 +12,7 @@
  */
 if (!defined('ABSPATH')) { exit; }
 
-define('ORION_AI_VERSION', '0.12.0');
+define('ORION_AI_VERSION', '0.13.0');
 define('ORION_AI_SCHEMA_VERSION', '0.9.0');
 define('ORION_AI_FILE', __FILE__);
 define('ORION_AI_DIR', plugin_dir_path(__FILE__));

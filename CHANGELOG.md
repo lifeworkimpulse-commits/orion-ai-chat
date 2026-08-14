@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0 — Open Semantic Planning (development)
+
+- Started a separate development branch without merging the `0.12.0` draft pull request.
+- Bumped the plugin development version to `0.13.0`; the database schema remains `0.9.0` because this initialization does not change storage.
+- Defined the migration from a closed canonical-role gate to open AI-generated project needs.
+- Kept deterministic validation as a safety and evidence layer rather than a catalogue-domain decision engine.
+- Planned optional image-assisted reranking for textually ambiguous products.
+
 ## 0.12.0 — Stabilization
 
 - Added a central canonical role registry shared by routing and product planning.
