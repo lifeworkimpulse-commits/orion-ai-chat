@@ -11,7 +11,7 @@ AI decides relevance. Deterministic code verifies evidence and live catalogue tr
 ## Target flow
 
 1. Classify the conversation and collect only information that materially changes product suitability.
-2. Produce an open `needs` array. Each need has a free-form key, description, required flag, constraints and uncertainty notes.
+2. Produce an open product-need plan. Each need has a free-form key, description, required flag, constraints and an optional known-role hint.
 3. Retrieve live candidates using title, description, categories, tags and attributes. Known role aliases may improve recall but must not gate unknown needs.
 4. Ask the AI to rerank only retrieved product IDs and cite the catalogue fields supporting each choice.
 5. Optionally inspect images for a small number of ambiguous candidates when vision is supported. Image evidence is secondary and cannot prove coverage, instructions or hidden bundle contents.
@@ -36,11 +36,12 @@ AI decides relevance. Deterministic code verifies evidence and live catalogue tr
 
 ## Migration stages
 
-### Stage 1 — Open need contract
+### Stage 1 — Open need contract — implemented
 
-- Accept free-form need keys alongside known canonical roles.
-- Preserve known roles as optional hints.
-- Trace planned needs and the evidence requested for each.
+- The routing tool accepts safe free-form product need keys instead of a closed role enum.
+- Known canonical roles remain optional `role_hint` metadata for existing specialist validators and ordering.
+- Normalized classification output exposes the open plan as `needs` while retaining `search_plan` as a compatibility alias.
+- Unknown need keys continue into catalogue retrieval rather than being discarded.
 
 ### Stage 2 — Open retrieval and reranking
 

@@ -26,17 +26,41 @@ final class Orion_Role_Registry {
     );
 
     public static function all(): array { return self::ROLES; }
+
     public static function canonical(string $role): string {
         $key = (string) preg_replace('/[^a-z0-9_-]/', '', strtolower($role));
         $compact = (string) preg_replace('/[^a-z0-9]/', '', $key);
         return self::ALIASES[$compact] ?? $key;
     }
+
     public static function canonical_for_query(string $role, string $query): string {
         $role = self::canonical($role);
         if ('protection' === $role && preg_match('/\b(dust sheet|protective sheet|polythene sheet|floor protection)\b/i', $query)) { return 'dust_sheet'; }
         return $role;
     }
-    public static function supported(string $role): bool { return in_array(self::canonical($role), self::ROLES, true); }
+
+    public static function known(string $role): bool {
+        return in_array(self::canonical($role), self::ROLES, true);
+    }
+
+    public static function open_key(string $role, string $query = ''): string {
+        $canonical = self::canonical_for_query($role, $query);
+        if (self::known($canonical)) { return $canonical; }
+        $key = strtolower(trim($role));
+        $key = (string) preg_replace('/[^a-z0-9]+/', '_', $key);
+        $key = trim($key, '_');
+        return substr($key, 0, 64);
+    }
+
+    public static function supported(string $role): bool {
+        return '' !== self::open_key($role);
+    }
+
+    public static function role_hint(string $role): string {
+        $canonical = self::canonical($role);
+        return self::known($canonical) ? $canonical : '';
+    }
+
     public static function optional(string $role): bool { return in_array(self::canonical($role), self::OPTIONAL, true); }
     public static function priority(string $role): int { return self::PRIORITY[$role] ?? self::PRIORITY[self::canonical($role)] ?? 80; }
 }

@@ -4,7 +4,9 @@
 
 - Started a separate development branch without merging the `0.12.0` draft pull request.
 - Bumped the plugin development version to `0.13.0`; the database schema remains `0.9.0` because this initialization does not change storage.
-- Defined the migration from a closed canonical-role gate to open AI-generated project needs.
+- Opened the semantic need contract so the AI can create safe free-form product need keys instead of choosing from a closed canonical-role enum.
+- Preserved known roles as optional hints for specialist validators, ordering and the existing `0.12.0` compatibility layer.
+- Added trace metadata and regression coverage for known and previously unseen need keys.
 - Kept deterministic validation as a safety and evidence layer rather than a catalogue-domain decision engine.
 - Planned optional image-assisted reranking for textually ambiguous products.
 
