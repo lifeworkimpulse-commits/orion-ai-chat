@@ -8,11 +8,13 @@ final class Orion_Selection_Evidence {
     public static function fields(): array { return self::FIELDS; }
 
     public static function normalise(array $choice): array {
-        $fields = is_array($choice['evidence_fields'] ?? null) ? $choice['evidence_fields'] : array();
-        $fields = array_values(array_unique(array_filter(array_map(static function ($field): string {
+        $raw_fields = is_array($choice['evidence_fields'] ?? null) ? $choice['evidence_fields'] : array();
+        $fields = array();
+        foreach ($raw_fields as $field) {
             $field = strtolower(trim((string) $field));
-            return in_array($field, self::FIELDS, true) ? $field : '';
-        }, $fields))));
+            if (in_array($field, self::FIELDS, true)) { $fields[] = $field; }
+        }
+        $fields = array_values(array_unique($fields));
         $confidence = strtolower(trim((string) ($choice['confidence'] ?? 'low'));
         if (!in_array($confidence, self::CONFIDENCE, true)) { $confidence = 'low'; }
         return array(
