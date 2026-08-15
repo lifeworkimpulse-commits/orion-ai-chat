@@ -60,6 +60,7 @@ AI decides relevance. Deterministic code verifies evidence and live catalogue tr
 - A functionally supported product may be selected with medium confidence while the exact unresolved compatibility detail is preserved in `uncertainty`.
 - The selector may not turn unresolved compatibility into a positive compatibility claim.
 - Missing needs are reserved for unsupported product functions, weak product-type evidence or unsafe selections rather than every secondary uncertainty.
+- When an otherwise valid selection still reports missing needs, one bounded compliance review rechecks direct function matches and keeps the better evidence-backed result.
 
 ### Stage 4 — Optional vision
 
