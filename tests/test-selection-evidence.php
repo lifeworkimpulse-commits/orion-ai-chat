@@ -8,6 +8,7 @@ final class Orion_Selection_Evidence_Test extends TestCase {
         ));
         self::assertSame(array('name','categories'),$evidence['evidence_fields']);
         self::assertSame('medium',$evidence['confidence']);
+        self::assertSame('Check the exact size.',$evidence['uncertainty']);
         self::assertTrue(Orion_Selection_Evidence::sufficient($evidence));
     }
     public function test_low_or_empty_evidence_is_rejected(): void {

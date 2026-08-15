@@ -53,11 +53,13 @@ AI decides relevance. Deterministic code verifies evidence and live catalogue tr
 - Low-confidence or unsupported choices are rejected and reported as missing needs.
 - Selection reasons, evidence fields and uncertainty are preserved on the verified product and in traces.
 
-### Stage 3 — Generic validation
+### Stage 3 — Generic validation — implemented
 
-- Apply specialist validators only when their domain is detected.
-- Keep unknown product types eligible when live catalogue evidence supports them.
-- Separate unsupported claims from unsuitable products.
+- Specialist validators continue to run only for recognized domains; unknown product types remain eligible when live evidence supports their function.
+- Direct catalogue evidence for a product function is separated from evidence for size, connector, fit, capacity or cross-product compatibility.
+- A functionally supported product may be selected with medium confidence while the exact unresolved compatibility detail is preserved in `uncertainty`.
+- The selector may not turn unresolved compatibility into a positive compatibility claim.
+- Missing needs are reserved for unsupported product functions, weak product-type evidence or unsafe selections rather than every secondary uncertainty.
 
 ### Stage 4 — Optional vision
 
