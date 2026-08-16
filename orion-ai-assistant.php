@@ -20,7 +20,7 @@ define('ORION_AI_URL', plugin_dir_url(__FILE__));
 
 $orion_ai_files = array(
     'class-orion-settings.php','class-orion-environment.php','class-orion-cleanup.php','interface-orion-ai-provider.php',
-    'class-orion-openrouter-client.php','class-orion-gemini-client.php','class-orion-selection-policy.php','class-orion-resilient-provider.php','class-orion-ai-provider-factory.php',
+    'class-orion-openrouter-client.php','class-orion-gemini-client.php','class-orion-selection-policy.php','class-orion-vision-review.php','class-orion-resilient-provider.php','class-orion-ai-provider-factory.php',
     'class-orion-knowledge-base.php','class-orion-product-index.php','class-orion-product-search.php','class-orion-catalogue-audit.php',
     'class-orion-rate-limiter.php','class-orion-conversation-service.php','class-orion-role-registry.php','class-orion-routing-rules.php',
     'class-orion-product-facts.php','class-orion-selection-evidence.php','class-orion-kit-validator.php','class-orion-intent-classifier.php','class-orion-context-manager.php',

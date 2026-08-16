@@ -62,12 +62,15 @@ AI decides relevance. Deterministic code verifies evidence and live catalogue tr
 - Missing needs are reserved for unsupported product functions, weak product-type evidence or unsafe selections rather than every secondary uncertainty.
 - When an otherwise valid selection still reports missing needs, one bounded compliance review rechecks direct function matches and keeps the better evidence-backed result.
 
-### Stage 4 — Optional vision
+### Stage 4 — Optional vision — implemented
 
-- Detect provider vision capability.
-- Send only top ambiguous candidates and their image URLs.
-- Record whether image evidence affected the decision.
-- Continue safely when vision is unavailable.
+- Vision review runs only after text selection and one text compliance review still leave unresolved needs.
+- At most three live WooCommerce product images are sent, and only for candidates belonging to those unresolved needs.
+- Images may support visible product type or visible components only; they cannot prove dimensions, capacity, coverage, hidden contents, technical suitability or compatibility.
+- The vision result replaces the text result only when it improves the evidence-backed selection score.
+- Trace attempts distinguish `vision_review` from `vision_review_selected` and include image count and candidate IDs.
+- Unsupported models, direct Google provider calls, missing images or failed multimodal requests safely retain the text-only result.
+- Developers can disable the conditional review with the `orion_ai_enable_vision_review` filter.
 
 ## Release gates
 
