@@ -3,14 +3,19 @@
 ## 0.13.0 — Open Semantic Planning (development)
 
 - Started a separate development branch without merging the `0.12.0` draft pull request.
-- Bumped the plugin development version to `0.13.0`; the database schema remains `0.9.0` because this initialization does not change storage.
+- Bumped the plugin development version to `0.13.0`; the database schema remains `0.9.0`.
 - Opened the semantic need contract so the AI can create safe free-form product need keys instead of choosing from a closed canonical-role enum.
 - Preserved known roles as optional hints for specialist validators, ordering and the existing `0.12.0` compatibility layer.
 - Added per-need live catalogue candidate groups for known and previously unseen product types.
-- Required the AI selector to identify explicit catalogue evidence fields and use high or medium confidence before a product can be accepted.
-- Added selection uncertainty, missing-needs diagnostics and deterministic evidence records for known compatibility recovery.
+- Required every accepted AI selection to identify explicit catalogue evidence and use high or medium confidence.
+- Separated direct product-function evidence from unresolved size, fit, capacity and cross-product compatibility claims.
+- Added one bounded text compliance review for unresolved direct function matches.
+- Added trace-level selection evidence, confidence, uncertainty and safe usage metrics.
+- Added bounded optional OpenRouter vision review for at most three unresolved live product candidates; unsupported or failed vision safely retains the text result.
+- Restricted image evidence to visible product type and visible components, never hidden contents, dimensions, capacity, coverage, technical suitability or compatibility.
+- Expanded the live routing evaluation from 9 to 14 scenarios, including five previously unseen open product needs.
+- Added a documented `0.13.0` acceptance workflow and richer read-only diagnostics.
 - Kept deterministic validation as a safety and evidence layer rather than a catalogue-domain decision engine.
-- Planned optional image-assisted reranking for textually ambiguous products.
 
 ## 0.12.0 — Stabilization
 

@@ -4,9 +4,9 @@ Private WooCommerce plugin that provides a grounded AI shopping assistant throug
 
 ## Current development version
 
-`0.13.0` is the open semantic planning development line. It starts from the unmerged `0.12.0` stabilization baseline and moves product planning from a closed role list toward AI-generated needs, open catalogue retrieval and evidence-based ranking.
+`0.13.0` is the open semantic planning development line. It starts from the unmerged `0.12.0` stabilization baseline and adds open AI-generated product needs, per-need live catalogue retrieval, evidence-based selection, generic uncertainty handling and bounded optional vision review.
 
-The `0.12.0` pull request remains draft and is not merged.
+The `0.12.0` and `0.13.0` pull requests remain draft and are not merged.
 
 ## Requirements
 
@@ -48,18 +48,22 @@ wp orion-ai migrate --apply
 wp orion-ai catalogue-index --apply
 wp orion-ai catalogue-audit --details
 wp orion-ai evaluate --provider=openrouter --model=<model>
+wp orion-ai diagnose --message="<prompt>"
 ```
 
-## Architecture direction
+## Architecture
 
 - AI produces an open list of project needs from arbitrary customer language.
 - Known roles remain optional hints and validator hooks, not a closed allowlist.
-- Live WooCommerce title, description, category and attributes drive retrieval and ranking.
-- Images may be used as secondary evidence when the configured provider supports vision.
-- Deterministic code remains responsible for live IDs, stock, price, explicit compatibility evidence and unsupported-claim prevention.
+- Every need receives its own live WooCommerce candidate set.
+- AI selections require explicit catalogue evidence and high or medium confidence.
+- Function evidence is separated from unresolved size, fit, capacity and compatibility details.
+- Images may be reviewed only after text processing leaves an unresolved need, using at most three relevant live product images.
+- Deterministic code remains responsible for live IDs, stock, price, candidate membership, specialist compatibility checks and unsupported-claim prevention.
+- Text-only operation remains complete when vision is unavailable.
 
-See `docs/open-semantic-planning-0.13.0.md` for the development scope and migration plan.
+See `docs/open-semantic-planning-0.13.0.md` for the architecture and `docs/acceptance-0.13.0.md` for the release checklist.
 
 ## Privacy
 
-The plugin stores conversations, usage metadata and operational events in custom tables. Configure finite retention and disclose AI processing in the store privacy policy.
+The plugin stores conversations, usage metadata and operational events in custom tables. Configure finite retention and disclose AI processing in the store privacy policy. Conditional vision review sends only public WooCommerce product image URLs for unresolved catalogue candidates; it does not send customer-uploaded images.
