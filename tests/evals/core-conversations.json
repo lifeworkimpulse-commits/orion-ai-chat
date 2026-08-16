@@ -52,5 +52,45 @@
     "expected_roles": ["primary_coating", "cleaner", "roller", "brush", "tray", "masking_tape"],
     "expected_optional_roles": ["cleaner", "roller", "brush", "tray", "masking_tape"],
     "unexpected_roles": ["dust_sheet"]
+  },
+  {
+    "name": "Open needs for bathroom sealant and gun",
+    "messages": ["I need to seal a 5 mm gap around a bathroom sink. Find white sanitary silicone and an application gun."],
+    "expected_intent": "project_recommendation",
+    "expected_min_needs": 2,
+    "expected_need_keywords": ["silicone", "gun"],
+    "require_open_need_contract": true
+  },
+  {
+    "name": "Open need for porcelain diamond drill bit",
+    "messages": ["I need to drill 10 mm holes through porcelain wall tiles. Find a suitable diamond drill bit."],
+    "expected_intent": "project_recommendation",
+    "expected_min_needs": 1,
+    "expected_need_keywords": ["diamond", "drill"],
+    "require_open_need_contract": true
+  },
+  {
+    "name": "Open need for shower waterproof membrane",
+    "messages": ["I am waterproofing a shower wall before tiling. Find a suitable waterproof membrane."],
+    "expected_intent": "project_recommendation",
+    "expected_min_needs": 1,
+    "expected_need_keywords": ["waterproof", "membrane"],
+    "require_open_need_contract": true
+  },
+  {
+    "name": "Open need for tile levelling clips",
+    "messages": ["I am laying large-format floor tiles and need tile levelling clips."],
+    "expected_intent": "project_recommendation",
+    "expected_min_needs": 1,
+    "expected_need_keywords": ["tile", "levelling", "clip"],
+    "require_open_need_contract": true
+  },
+  {
+    "name": "Open need for wood repair resin",
+    "messages": ["I need a repair resin for a rotten section of an indoor wooden window frame."],
+    "expected_intent": "project_recommendation",
+    "expected_min_needs": 1,
+    "expected_need_keywords": ["repair", "resin", "wood"],
+    "require_open_need_contract": true
   }
 ]
