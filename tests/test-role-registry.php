@@ -16,5 +16,20 @@ final class Orion_Role_Registry_Test extends TestCase {
         self::assertSame('tray',Orion_Role_Registry::role_hint('tray'));
         self::assertFalse(Orion_Role_Registry::supported(''));
     }
+    public function test_open_painting_keys_get_known_validator_hints(): void {
+        self::assertSame('primary_coating',Orion_Role_Registry::canonical('ceiling_paint'));
+        self::assertSame('primary_coating',Orion_Role_Registry::canonical('primary_floor_coating'));
+        self::assertSame('roller',Orion_Role_Registry::canonical('floor_coating_roller'));
+        self::assertSame('tray',Orion_Role_Registry::canonical('paint_tray'));
+        self::assertSame('brush',Orion_Role_Registry::canonical('cutting_in_brush'));
+        self::assertSame('cleaner',Orion_Role_Registry::canonical('concrete_floor_cleaner'));
+        self::assertSame('primer',Orion_Role_Registry::canonical('concrete_floor_primer'));
+        self::assertSame('filler',Orion_Role_Registry::canonical('concrete_repair_filler'));
+        self::assertSame('sandpaper',Orion_Role_Registry::canonical('sanding_abrasive'));
+        self::assertSame('scraper',Orion_Role_Registry::canonical('paint_scraper'));
+        self::assertSame('tools',Orion_Role_Registry::canonical('roller_extension_pole'));
+        self::assertSame('protection',Orion_Role_Registry::canonical('floor_coating_safety_equipment'));
+        self::assertTrue(Orion_Role_Registry::optional('floor_coating_roller'));
+    }
     public function test_principal_material_has_highest_priority(): void { self::assertLessThan(Orion_Role_Registry::priority('primer'),Orion_Role_Registry::priority('primary_coating')); }
 }
