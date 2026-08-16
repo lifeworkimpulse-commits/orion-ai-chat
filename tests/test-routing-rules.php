@@ -20,6 +20,10 @@ final class Orion_Routing_Rules_Test extends TestCase {
         self::assertFalse(Orion_Routing_Rules::preparation_role_needed('sandpaper',$state));
         self::assertFalse(Orion_Routing_Rules::preparation_role_needed('scraper',$state));
     }
+    public function test_new_plaster_is_preserved_in_compact_topic_state(): void {
+        $state=array('surface'=>'ceiling','active_topic'=>'completematerialstopaintabarefullydrynew-plasterceilingwhite');
+        self::assertTrue(Orion_Routing_Rules::preparation_role_needed('primer',$state));
+    }
     public function test_positive_conditions_activate_only_matching_preparation_roles(): void {
         self::assertTrue(Orion_Routing_Rules::preparation_role_needed('cleaner',array('notes'=>'The floor has oily grease contamination.')));
         self::assertFalse(Orion_Routing_Rules::preparation_role_needed('filler',array('notes'=>'The floor has oily grease contamination.')));

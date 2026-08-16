@@ -19,6 +19,7 @@ final class Orion_Role_Registry_Test extends TestCase {
     public function test_open_painting_keys_get_known_validator_hints(): void {
         self::assertSame('primary_coating',Orion_Role_Registry::canonical('ceiling_paint'));
         self::assertSame('primary_coating',Orion_Role_Registry::canonical('primary_floor_coating'));
+        self::assertSame('primary_coating',Orion_Role_Registry::canonical('ceiling_topcoat'));
         self::assertSame('roller',Orion_Role_Registry::canonical('floor_coating_roller'));
         self::assertSame('tray',Orion_Role_Registry::canonical('paint_tray'));
         self::assertSame('brush',Orion_Role_Registry::canonical('cutting_in_brush'));

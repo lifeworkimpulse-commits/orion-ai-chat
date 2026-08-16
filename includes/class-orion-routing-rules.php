@@ -43,7 +43,8 @@ final class Orion_Routing_Rules {
         $role = strtolower(trim($role));
         $text = self::positive_surface_text($state);
         if ('primer' === $role) {
-            return (bool) preg_match('/\b(new plaster|bare|unsealed|porous|stain|stained|water mark|nicotine)\b/', $text);
+            if (preg_match('/(?:new|bare)[\s_-]*plaster/i', $text)) { return true; }
+            return (bool) preg_match('/\b(bare|unsealed|porous|stain|stained|water mark|nicotine)\b/', $text);
         }
         if ('cleaner' === $role) {
             return (bool) preg_match('/\b(dirty|dusty|oil|oily|grease|greasy|contaminated|contamination|mould|mold)\b/', $text);
