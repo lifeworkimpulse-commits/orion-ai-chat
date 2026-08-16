@@ -14,7 +14,12 @@ final class Orion_Selection_Policy {
     }
 
     public static function instructions(): string {
-        return 'Generic validation policy: separate evidence that a product performs the requested function from evidence for secondary compatibility details. When a live title, category, attributes or description directly identifies the requested product type or function, you MUST select that product even if the need says compatible, explicitly compatible or must match and an exact size, connector, fit, capacity or cross-product compatibility detail remains unverified. Use medium confidence, record the exact unresolved detail in uncertainty, and do not claim compatibility. Add a need to missing_needs only when the requested product function itself is unsupported, evidence is too weak to identify the product type, or selection would be unsafe. Never convert unresolved compatibility into a positive compatibility claim.';
+        return 'Generic validation policy: separate evidence that a product performs the requested function from evidence for secondary compatibility details. When a live title, category, attributes or description directly identifies the requested product type or function, you MUST select that product even if the need says compatible, explicitly compatible or must match and an exact size, connector, fit, capacity or cross-product compatibility detail remains unverified. Use medium confidence, record the exact unresolved detail in uncertainty, and do not claim compatibility. Add a need to missing_needs only when the requested product function itself is unsupported, evidence is too weak to identify the product type, or selection would be unsafe. Never convert unresolved compatibility into a positive compatibility claim. Keep each selection reason and uncertainty concise, using one sentence and no more than 180 characters for each field, so the tool call remains complete.';
+    }
+
+    public static function valid_result(array $result): bool {
+        $data=self::tool_data($result);
+        return is_array($data)&&is_array($data['selections']??null)&&is_array($data['missing_needs']??null);
     }
 
     public static function needs_review(array $result, array $messages = array()): bool { return !empty(self::review_needs($result,$messages)); }

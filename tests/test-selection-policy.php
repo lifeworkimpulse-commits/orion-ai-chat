@@ -7,11 +7,16 @@ final class Orion_Selection_Policy_Test extends TestCase {
         self::assertStringContainsString('Use medium confidence',$messages[0]['content']);
         self::assertStringContainsString('record the exact unresolved detail in uncertainty',$messages[0]['content']);
         self::assertStringContainsString('do not claim compatibility',$messages[0]['content']);
+        self::assertStringContainsString('no more than 180 characters',$messages[0]['content']);
     }
     public function test_policy_creates_system_message_when_missing(): void {
         $messages = Orion_Selection_Policy::apply(array(array('role'=>'user','content'=>'Need a tool.')));
         self::assertSame('system',$messages[0]['role']);
         self::assertCount(2,$messages);
+    }
+    public function test_truncated_tool_arguments_are_not_valid_selection_results(): void {
+        self::assertFalse(Orion_Selection_Policy::valid_result(array('message'=>array('tool_calls'=>array(array('function'=>array('arguments'=>'{"selections":[')))))));
+        self::assertTrue(Orion_Selection_Policy::valid_result($this->result(array(),array('application_gun'))));
     }
     public function test_missing_needs_trigger_one_compliance_review(): void {
         $result = $this->result(array(),array('application_gun'));
