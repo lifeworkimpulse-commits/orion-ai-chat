@@ -5,11 +5,11 @@ final class Orion_Vision_Review {
     public static function supported(array $result): bool {
         if ('openrouter' !== strtolower((string) ($result['provider'] ?? ''))) { return false; }
         $model = strtolower((string) ($result['model'] ?? ''));
-        $markers = array('gpt-4o','gpt-4.1','gpt-5','claude-3','claude-4','sonnet-4','gemini','qwen-vl','llava','vision');
+        $markers = array('gpt-4o','gpt-4.1','claude-3','claude-4','sonnet-4','gemini','qwen-vl','llava','vision');
         $supported = false;
         foreach ($markers as $marker) { if (str_contains($model,$marker)) { $supported = true; break; } }
-        if (!$supported) { return false; }
-        return !function_exists('apply_filters') || (bool) apply_filters('orion_ai_enable_vision_review',true,$result);
+        if (function_exists('apply_filters')) { return (bool) apply_filters('orion_ai_enable_vision_review',$supported,$result); }
+        return $supported;
     }
 
     public static function build(array $messages, array $selection, int $limit = 3): array {

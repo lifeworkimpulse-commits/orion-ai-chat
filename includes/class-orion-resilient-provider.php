@@ -6,10 +6,10 @@ final class Orion_Resilient_Provider implements Orion_AI_Provider{
  public function chat(array $messages,array $tools=array()):array{
   if('selection'===$this->stage)$messages=Orion_Selection_Policy::apply($messages);
   $first=$this->primary->chat($messages,$tools);$attempts=array($this->attempt($first,'primary'));
-  if('selection'===$this->stage&&$this->acceptable($first,$tools)&&Orion_Selection_Policy::needs_review($first)){
+  if('selection'===$this->stage&&$this->acceptable($first,$tools)&&Orion_Selection_Policy::needs_review($first,$messages)){
    $review=$this->primary->chat(Orion_Selection_Policy::review_messages($messages,$first),$tools);$preferred=$this->acceptable($review,$tools)&&Orion_Selection_Policy::prefer_review($first,$review);$attempts[]=$this->attempt($review,$preferred?'selection_review_selected':'selection_review');if($preferred)$first=$review;
   }
-  if('selection'===$this->stage&&$this->acceptable($first,$tools)&&Orion_Selection_Policy::needs_review($first)&&Orion_Vision_Review::supported($first)){
+  if('selection'===$this->stage&&$this->acceptable($first,$tools)&&Orion_Selection_Policy::needs_review($first,$messages)&&Orion_Vision_Review::supported($first)){
    $vision=Orion_Vision_Review::build($messages,$first,3);
    if($vision['image_count']>0){$review=$this->primary->chat($vision['messages'],$tools);$preferred=$this->acceptable($review,$tools)&&Orion_Selection_Policy::prefer_review($first,$review);$attempts[]=$this->attempt($review,$preferred?'vision_review_selected':'vision_review',array('image_count'=>$vision['image_count'],'candidate_ids'=>$vision['candidate_ids']));if($preferred)$first=$review;}
   }

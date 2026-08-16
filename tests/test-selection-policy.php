@@ -19,6 +19,17 @@ final class Orion_Selection_Policy_Test extends TestCase {
         $messages = Orion_Selection_Policy::review_messages(array(array('role'=>'system','content'=>'Select.')),$result);
         self::assertStringContainsString('application_gun',$messages[1]['content']);
     }
+    public function test_optional_non_core_need_does_not_trigger_review(): void {
+        $result=$this->result(array(),array('protection'));
+        $messages=$this->messages(array(array('need_key'=>'protection','role_hint'=>'protection','required'=>false)));
+        self::assertFalse(Orion_Selection_Policy::needs_review($result,$messages));
+    }
+    public function test_required_or_core_need_still_triggers_review(): void {
+        $required=$this->result(array(),array('application_gun'));
+        self::assertTrue(Orion_Selection_Policy::needs_review($required,$this->messages(array(array('need_key'=>'application_gun','role_hint'=>'','required'=>true)))));
+        $roller=$this->result(array(),array('roller'));
+        self::assertTrue(Orion_Selection_Policy::needs_review($roller,$this->messages(array(array('need_key'=>'roller','role_hint'=>'roller','required'=>false)))));
+    }
     public function test_review_is_preferred_only_when_selection_score_improves(): void {
         $current = $this->result(array(array('product_id'=>1)),array('application_gun'));
         $better = $this->result(array(array('product_id'=>1),array('product_id'=>2)),array());
@@ -26,6 +37,7 @@ final class Orion_Selection_Policy_Test extends TestCase {
         self::assertTrue(Orion_Selection_Policy::prefer_review($current,$better));
         self::assertFalse(Orion_Selection_Policy::prefer_review($current,$same));
     }
+    private function messages(array $needs): array {return array(array('role'=>'system','content'=>'Select.'),array('role'=>'user','content'=>json_encode(array('products'=>array(),'needs'=>$needs))));}
     private function result(array $selections,array $missing): array {
         return array('ok'=>true,'message'=>array('tool_calls'=>array(array('function'=>array('arguments'=>json_encode(array('selections'=>$selections,'missing_needs'=>$missing)))))));
     }
