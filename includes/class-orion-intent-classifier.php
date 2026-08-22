@@ -9,9 +9,9 @@ final class Orion_Intent_Classifier {
         if ($policy) { return $policy; }
         $provider = Orion_AI_Provider_Factory::create($settings, 'routing');
         $fallback = $this->fallback();
-        $system = 'You are a semantic router for a WooCommerce shopping assistant. Call route_request exactly once. Preserve active project context for short answers. Ask at most three questions and only when missing information materially changes suitability, safety or quantity. Never calculate area_m2 until the dimension unit is known. Use only the supported catalogue roles. For complete painting kits prioritise the principal material, roller, tray, brush, masking tape and floor-appropriate protection before conditional preparation roles. Only the principal material may be required by default. Questions about delivery, shipping, collection, a destination or postcode are store_policy. Never use personas or services as product roles.';
+        $system = 'You are an open semantic planner for a WooCommerce shopping assistant. Call route_request exactly once. Preserve active project context for short answers. Ask at most three questions and only when missing information materially changes suitability, safety or quantity. Never calculate area_m2 until the dimension unit is known. Build search_plan as an open list of concrete product needs derived from the customer project. Each role is a short semantic need key such as primary_coating, diamond_drill_bit or waterproof_membrane. Known catalogue roles may be used when they fit, but they are hints rather than a closed list. Never force a new product type into an unrelated known role. For complete painting kits prioritise the principal material, roller, tray, brush, masking tape and floor-appropriate protection before conditional preparation needs. Only principal materials should normally be required by default. Questions about delivery, shipping, collection, a destination or postcode are store_policy. Never use personas, professions or services as product needs.';
         $tool = array('type'=>'function','function'=>array(
-            'name'=>'route_request','description'=>'Return the semantic route.',
+            'name'=>'route_request','description'=>'Return the semantic route and an open product-need plan.',
             'parameters'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array(
                 'intent'=>array('type'=>'string','enum'=>array('project_recommendation','product_search','store_policy','general','manager_follow_up')),
                 'topic'=>array('type'=>'string'),'is_new_topic'=>array('type'=>'boolean'),'confidence'=>array('type'=>'number'),
@@ -23,9 +23,10 @@ final class Orion_Intent_Classifier {
                     'finish'=>array('type'=>'string'),'dimensions'=>array('type'=>'string'),'dimension_length'=>array('type'=>'number'),
                     'dimension_width'=>array('type'=>'number'),'dimension_unit'=>array('type'=>'string'),'notes'=>array('type'=>'string'),
                 )),
-                'search_plan'=>array('type'=>'array','maxItems'=>10,'items'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array(
-                    'role'=>array('type'=>'string','enum'=>Orion_Role_Registry::all()),'query'=>array('type'=>'string'),
-                    'required'=>array('type'=>'boolean'),'requirements'=>array('type'=>'object'),
+                'search_plan'=>array('type'=>'array','maxItems'=>12,'items'=>array('type'=>'object','additionalProperties'=>false,'properties'=>array(
+                    'role'=>array('type'=>'string','minLength'=>2,'maxLength'=>64,'description'=>'Free-form product need key. Use a known role only when it accurately describes the need.'),
+                    'description'=>array('type'=>'string','description'=>'Plain-language description of why the project needs this product type.'),
+                    'query'=>array('type'=>'string'),'required'=>array('type'=>'boolean'),'requirements'=>array('type'=>'object'),
                 ),'required'=>array('role','query','required'))),
             ),'required'=>array('intent','topic','is_new_topic','confidence','needs_clarification','clarifying_questions','policy_query','state_patch','search_plan')),
         ));
@@ -46,7 +47,7 @@ final class Orion_Intent_Classifier {
         if (in_array($out['intent'], array('project_recommendation','product_search'), true)) {
             foreach (Orion_Routing_Rules::extract_dimensions($message) as $key => $value) { if (!isset($out['state_patch'][$key])) { $out['state_patch'][$key] = $value; } }
         }
-        $out['_diagnostic'] = array('status'=>'ok','usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'fallback_used'=>!empty($result['fallback_used']));
+        $out['_diagnostic'] = array('status'=>'ok','usage'=>$result['usage'] ?? array(),'attempts'=>$result['attempts'] ?? array(),'fallback_used'=>!empty($result['fallback_used']),'open_need_contract'=>true);
         return $out;
     }
 
@@ -87,7 +88,8 @@ final class Orion_Intent_Classifier {
         $out['intent'] = $state['active_intent'] ?? 'project_recommendation'; $out['topic'] = $state['active_topic'] ?? 'project'; $out['confidence'] = 1.0;
         $out['needs_clarification'] = !empty($remaining); $out['clarifying_questions'] = $remaining; $out['state_patch'] = $patch;
         $out['search_plan'] = is_array($state['pending_search_plan'] ?? null) ? $state['pending_search_plan'] : array();
-        $out['_diagnostic'] = array('status'=>'deterministic_clarification_resolution','resolved_fields'=>array_keys($patch));
+        $out['needs'] = $out['search_plan'];
+        $out['_diagnostic'] = array('status'=>'deterministic_clarification_resolution','resolved_fields'=>array_keys($patch),'open_need_contract'=>true);
         return $out;
     }
 
@@ -109,17 +111,27 @@ final class Orion_Intent_Classifier {
         }
         if ((isset($out['state_patch']['dimension_length']) || isset($out['state_patch']['dimension_width'])) && empty($out['state_patch']['dimension_unit'])) { unset($out['state_patch']['area_m2']); }
         $plan = is_array($data['search_plan'] ?? null) ? $data['search_plan'] : array();
-        foreach (array_slice($plan,0,10) as $item) {
+        foreach (array_slice($plan,0,12) as $item) {
             if (!is_array($item)) { continue; }
             $query = sanitize_text_field((string)($item['query'] ?? ''));
-            $role = Orion_Role_Registry::canonical_for_query((string)($item['role'] ?? ''), $query);
+            $role = Orion_Role_Registry::open_key((string)($item['role'] ?? ''), $query);
             if (!Orion_Role_Registry::supported($role) || !$query) { continue; }
             $requirements = is_array($item['requirements'] ?? null) ? $item['requirements'] : array(); $clean = array();
             foreach (array_slice($requirements,0,10,true) as $key => $value) { $clean[sanitize_key((string)$key)] = sanitize_text_field(is_scalar($value) ? (string)$value : wp_json_encode($value)); }
-            $out['search_plan'][] = array('role'=>$role,'query'=>$query,'required'=>!empty($item['required']) && !Orion_Role_Registry::optional($role),'requirements'=>$clean);
+            $known = Orion_Role_Registry::known($role);
+            $out['search_plan'][] = array(
+                'role'=>$role,
+                'need_key'=>$role,
+                'role_hint'=>$known ? $role : '',
+                'description'=>sanitize_text_field((string)($item['description'] ?? $query)),
+                'query'=>$query,
+                'required'=>!empty($item['required']) && (!$known || !Orion_Role_Registry::optional($role)),
+                'requirements'=>$clean,
+            );
         }
         $combined_state = array_merge($out['state_patch'], array('project_type'=>$out['state_patch']['project_type'] ?? $out['topic']));
         $out['search_plan'] = $this->normalise_plan($out['search_plan'], $combined_state);
+        $out['needs'] = $out['search_plan'];
         if ($out['intent'] === 'product_search' && (!empty($out['state_patch']['project_type']) || isset($out['state_patch']['area_m2'])) && count($out['search_plan']) > 1) { $out['intent'] = 'project_recommendation'; }
         return $out;
     }
@@ -127,9 +139,12 @@ final class Orion_Intent_Classifier {
     private function normalise_plan(array $plan, array $state): array {
         $out = array(); $seen = array(); $floor = Orion_Routing_Rules::is_floor_project($state);
         foreach ($plan as $item) {
-            $role = (string)($item['role'] ?? '');
+            $role = Orion_Role_Registry::open_key((string)($item['role'] ?? ''), (string)($item['query'] ?? ''));
             if ('dust_sheet' === $role && $floor) { continue; }
             if (!Orion_Role_Registry::supported($role) || isset($seen[$role])) { continue; }
+            $item['role'] = $role;
+            $item['need_key'] = $role;
+            $item['role_hint'] = Orion_Role_Registry::role_hint($role);
             $out[] = $item; $seen[$role] = true;
         }
         $complete = Orion_Routing_Rules::wants_complete_kit($state) || count($out) >= 6;
@@ -144,11 +159,14 @@ final class Orion_Intent_Classifier {
             if ($floor) { $core['cleaner'] = 'floor cleaner or degreaser for coating preparation'; }
             else { $core['dust_sheet'] = 'protective dust sheet for painting'; }
             foreach ($core as $role => $query) {
-                if (!isset($seen[$role])) { $out[] = array('role'=>$role,'query'=>$query,'required'=>false,'requirements'=>array('surface'=>$surface)); $seen[$role] = true; }
+                if (!isset($seen[$role])) {
+                    $out[] = array('role'=>$role,'need_key'=>$role,'role_hint'=>$role,'description'=>$query,'query'=>$query,'required'=>false,'requirements'=>array('surface'=>$surface));
+                    $seen[$role] = true;
+                }
             }
         }
         usort($out,static fn($first,$second)=>Orion_Role_Registry::priority((string)($first['role'] ?? ''))<=>Orion_Role_Registry::priority((string)($second['role'] ?? '')));
-        return array_slice($out,0,10);
+        return array_slice($out,0,12);
     }
 
     private function canonical_surface(string $surface): string {
@@ -159,7 +177,10 @@ final class Orion_Intent_Classifier {
         return sanitize_text_field($surface);
     }
 
-    private function fallback(): array { return array('intent'=>'manager_follow_up','topic'=>'unclassified','is_new_topic'=>false,'confidence'=>0.0,'needs_clarification'=>false,'clarifying_questions'=>array(),'policy_query'=>'','state_patch'=>array(),'search_plan'=>array(),'_diagnostic'=>array('status'=>'fallback')); }
+    private function fallback(): array {
+        return array('intent'=>'manager_follow_up','topic'=>'unclassified','is_new_topic'=>false,'confidence'=>0.0,'needs_clarification'=>false,'clarifying_questions'=>array(),'policy_query'=>'','state_patch'=>array(),'search_plan'=>array(),'needs'=>array(),'_diagnostic'=>array('status'=>'fallback'));
+    }
+
     private function decode(string $text): ?array {
         $text = trim((string) preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($text))); $data = json_decode($text, true);
         if (is_array($data)) { return $data; }

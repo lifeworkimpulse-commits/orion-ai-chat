@@ -13,12 +13,16 @@ final class Orion_Routing_Rules_Test extends TestCase {
     }
     public function test_floor_and_complete_kit_state(): void { $state=array('project_type'=>'garage floor coating','notes'=>'Find everything needed'); self::assertTrue(Orion_Routing_Rules::is_floor_project($state)); self::assertTrue(Orion_Routing_Rules::wants_complete_kit($state)); }
     public function test_negated_conditions_do_not_activate_unrelated_preparation_roles(): void {
-        $state=array('surface'=>'concrete','notes'=>'Concrete is bare, clean, dry and sound, with no oil, cracks, damp or previous coating.');
+        $state=array('surface'=>'concrete','notes'=>'Concrete is bare, clean, dry and sound, with no oil contamination, no cracks and no previous coating.');
         self::assertTrue(Orion_Routing_Rules::preparation_role_needed('primer',$state));
         self::assertFalse(Orion_Routing_Rules::preparation_role_needed('cleaner',$state));
         self::assertFalse(Orion_Routing_Rules::preparation_role_needed('filler',$state));
         self::assertFalse(Orion_Routing_Rules::preparation_role_needed('sandpaper',$state));
         self::assertFalse(Orion_Routing_Rules::preparation_role_needed('scraper',$state));
+    }
+    public function test_new_plaster_is_preserved_in_compact_topic_state(): void {
+        $state=array('surface'=>'ceiling','active_topic'=>'completematerialstopaintabarefullydrynew-plasterceilingwhite');
+        self::assertTrue(Orion_Routing_Rules::preparation_role_needed('primer',$state));
     }
     public function test_positive_conditions_activate_only_matching_preparation_roles(): void {
         self::assertTrue(Orion_Routing_Rules::preparation_role_needed('cleaner',array('notes'=>'The floor has oily grease contamination.')));

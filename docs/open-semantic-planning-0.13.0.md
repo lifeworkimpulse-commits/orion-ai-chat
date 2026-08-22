@@ -1,0 +1,81 @@
+# Open Semantic Planning 0.13.0
+
+## Goal
+
+Let the AI understand arbitrary customer projects and discover suitable live WooCommerce products without requiring every possible product need, customer answer or future catalogue item to be encoded as a PHP rule.
+
+## Design principle
+
+AI decides relevance. Deterministic code verifies evidence and live catalogue truth.
+
+## Target flow
+
+1. Classify the conversation and collect only information that materially changes product suitability.
+2. Produce an open product-need plan. Each need has a free-form key, description, required flag, constraints and an optional known-role hint.
+3. Retrieve live candidates using title, description, categories, tags and attributes. Known role aliases may improve recall but must not gate unknown needs.
+4. Ask the AI to rerank only retrieved product IDs and identify the exact catalogue fields supporting each choice.
+5. Optionally inspect images for a small number of ambiguous candidates when vision is supported. Image evidence is secondary and cannot prove coverage, instructions or hidden bundle contents.
+6. Revalidate product existence, visibility, stock, price and supported claims before returning cards.
+7. Ask a clarification question or report uncertainty when evidence is insufficient.
+
+## What remains deterministic
+
+- Security, permissions, rate limits and session handling.
+- Live WooCommerce ID, visibility, stock and purchasability checks.
+- Candidate-set membership for every selected need.
+- No invented prices, links, coverage, delivery policies or product IDs.
+- Explicit bundle/component and dimensional compatibility validation when a compatibility claim is made.
+- Product-card limits, traceability and provider fallback.
+
+## What moves to AI planning
+
+- The project-specific list of needed materials and tools.
+- Synonyms and search phrases for each need.
+- Relevance ranking across new or previously unseen product types.
+- Whether a known role is relevant to the current project.
+- Evidence-based explanations and uncertainty reporting.
+
+## Migration stages
+
+### Stage 1 — Open need contract — implemented
+
+- The routing tool accepts safe free-form product need keys instead of a closed role enum.
+- Known canonical roles remain optional `role_hint` metadata for existing specialist validators and ordering.
+- Normalized classification output exposes the open plan as `needs` while retaining `search_plan` as a compatibility alias.
+- Unknown need keys continue into catalogue retrieval rather than being discarded.
+
+### Stage 2 — Open retrieval and reranking — implemented
+
+- Every need receives an independent live candidate set.
+- Unknown need keys use the same title, description, category and attribute retrieval path as known roles.
+- The selector can choose only product IDs retrieved for that exact need.
+- Every AI selection must identify explicit supporting catalogue fields and have high or medium confidence.
+- Low-confidence or unsupported choices are rejected and reported as missing needs.
+- Selection reasons, evidence fields and uncertainty are preserved on the verified product and in traces.
+
+### Stage 3 — Generic validation — implemented
+
+- Specialist validators continue to run only for recognized domains; unknown product types remain eligible when live evidence supports their function.
+- Direct catalogue evidence for a product function is separated from evidence for size, connector, fit, capacity or cross-product compatibility.
+- A functionally supported product may be selected with medium confidence while the exact unresolved compatibility detail is preserved in `uncertainty`.
+- The selector may not turn unresolved compatibility into a positive compatibility claim.
+- Missing needs are reserved for unsupported product functions, weak product-type evidence or unsafe selections rather than every secondary uncertainty.
+- When an otherwise valid selection still reports missing needs, one bounded compliance review rechecks direct function matches and keeps the better evidence-backed result.
+
+### Stage 4 — Optional vision — implemented
+
+- Vision review runs only after text selection and one text compliance review still leave unresolved needs.
+- At most three live WooCommerce product images are sent, and only for candidates belonging to those unresolved needs.
+- Images may support visible product type or visible components only; they cannot prove dimensions, capacity, coverage, hidden contents, technical suitability or compatibility.
+- The vision result replaces the text result only when it improves the evidence-backed selection score.
+- Trace attempts distinguish `vision_review` from `vision_review_selected` and include image count and candidate IDs.
+- Unsupported models, direct Google provider calls, missing images or failed multimodal requests safely retain the text-only result.
+- Developers can disable the conditional review with the `orion_ai_enable_vision_review` filter.
+
+## Release gates
+
+- Existing `0.12.0` evaluations remain green.
+- Unknown free-form needs can retrieve and select new catalogue products.
+- Known validators still reject invented IDs and unsupported compatibility claims.
+- New WooCommerce products become searchable through existing index hooks without code changes.
+- Text-only operation remains complete when image analysis is disabled.

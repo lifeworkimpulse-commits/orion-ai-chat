@@ -37,13 +37,14 @@ final class Orion_Routing_Rules {
     }
     public static function has_surface_condition(array $state): bool {
         $text = self::positive_surface_text($state);
-        return (bool) preg_match('/\b(new plaster|bare|unsealed|porous|stain|stained|damage|damaged|cracks?|cracked|holes?|uneven|loose|flaking|peeling|dirty|dusty|oil|grease|greasy|contaminated|mould|mold)\b/', $text);
+        return (bool) preg_match('/\b(new plaster|bare|unsealed|porous|stain|stained|damage|damaged|cracks?|cracked|holes?|uneven|loose|flaking|peeling|dirty|dusty|oil|grease|greasy|contaminated|contamination|mould|mold)\b/', $text);
     }
     public static function preparation_role_needed(string $role,array $state): bool {
         $role = strtolower(trim($role));
         $text = self::positive_surface_text($state);
         if ('primer' === $role) {
-            return (bool) preg_match('/\b(new plaster|bare|unsealed|porous|stain|stained|water mark|nicotine)\b/', $text);
+            if (preg_match('/(?:new|bare)[\s_-]*plaster/i', $text)) { return true; }
+            return (bool) preg_match('/\b(bare|unsealed|porous|stain|stained|water mark|nicotine)\b/', $text);
         }
         if ('cleaner' === $role) {
             return (bool) preg_match('/\b(dirty|dusty|oil|oily|grease|greasy|contaminated|contamination|mould|mold)\b/', $text);
@@ -61,7 +62,7 @@ final class Orion_Routing_Rules {
     }
     private static function positive_surface_text(array $state): string {
         $text = self::state_text($state);
-        $condition = '(?:oil|grease|damp|moisture|cracks?|holes?|damage|mould|mold|stains?|previous coatings?|old coatings?|existing coatings?|loose paint|flaking|peeling)';
+        $condition = '(?:oil(?:\s+contamination)?|grease(?:\s+contamination)?|contamination|damp|moisture|cracks?|holes?|damage|mould|mold|stains?|previous coatings?|old coatings?|existing coatings?|loose paint|flaking|peeling)';
         $pattern = '/\b(?:no|without|free\s+(?:from|of))\s+(?:any\s+)?' . $condition . '(?:\s*,\s*' . $condition . ')*(?:\s*(?:and|or)\s*' . $condition . ')?/i';
         $cleaned = preg_replace($pattern,' ',$text);
         return is_string($cleaned) ? $cleaned : $text;
