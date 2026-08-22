@@ -2,11 +2,13 @@
 
 Private WooCommerce plugin that provides a grounded AI shopping assistant through OpenRouter or Google Gemini.
 
-## Current development version
+## Current release candidate
 
-`0.13.0` is the open semantic planning development line. It starts from the unmerged `0.12.0` stabilization baseline and adds open AI-generated product needs, per-need live catalogue retrieval, evidence-based selection, generic uncertainty handling and bounded optional vision review.
+`0.13.0` is the acceptance-frozen open semantic planning line. The accepted code baseline is commit `85b0fe9`; it passed the 14-case live routing evaluation plus representative browser, trace and provider-fallback checks.
 
-The `0.12.0` and `0.13.0` pull requests remain draft and are not merged.
+It starts from the unmerged `0.12.0` stabilization baseline and adds open AI-generated product needs, per-need live catalogue retrieval, evidence-based selection, generic uncertainty handling and bounded optional vision review.
+
+The `0.12.0` and `0.13.0` pull requests remain draft and are not merged. New feature work should not be added to the frozen `0.13.0` code baseline.
 
 ## Requirements
 
@@ -58,11 +60,12 @@ wp orion-ai diagnose --message="<prompt>"
 - Every need receives its own live WooCommerce candidate set.
 - AI selections require explicit catalogue evidence and high or medium confidence.
 - Function evidence is separated from unresolved size, fit, capacity and compatibility details.
-- Images may be reviewed only after text processing leaves an unresolved need, using at most three relevant live product images.
+- Verified multimodal models may review images only after text processing leaves an unresolved required or core need, using at most three relevant live product images.
+- Unverified or text-only models skip image review without breaking selection.
 - Deterministic code remains responsible for live IDs, stock, price, candidate membership, specialist compatibility checks and unsupported-claim prevention.
 - Text-only operation remains complete when vision is unavailable.
 
-See `docs/open-semantic-planning-0.13.0.md` for the architecture and `docs/acceptance-0.13.0.md` for the release checklist.
+See `docs/open-semantic-planning-0.13.0.md` for the architecture and `docs/acceptance-0.13.0.md` for the accepted release-candidate baseline.
 
 ## Privacy
 

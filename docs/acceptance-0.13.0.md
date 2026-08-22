@@ -1,6 +1,25 @@
 # Orion AI Assistant 0.13.0 Acceptance
 
-This checklist validates the open semantic planning development line without merging either draft pull request.
+This checklist validates the open semantic planning release candidate without merging either draft pull request.
+
+## Accepted baseline
+
+- Acceptance date: 2026-08-22
+- Accepted code commit: `85b0fe9`
+- Provider/model: OpenRouter / `openai/gpt-5.6-luna`
+- Live routing evaluation: `14/14` (`100%`)
+- Average evaluation latency: `4,369 ms`
+- Evaluation tokens: `12,176`
+- PHP syntax: passed on PHP 8.0–8.3
+- PHPUnit: passed
+- PHPStan stabilization core: passed
+- Assets and evaluation schema: passed
+- Bathroom sealant and gun: accepted in trace 63
+- Fully specified garage floor kit: accepted in trace 66
+- Bare-new-plaster ceiling kit: accepted in trace 68
+- Google fallback: manually accepted
+
+The code baseline is frozen for `0.13.0`. Documentation-only acceptance updates may follow it. New feature development belongs in a later version branch.
 
 ## 1. Update and static checks
 
@@ -50,7 +69,7 @@ Use a fresh chat for each scenario:
 - fully specified 24 m² concrete garage floor request must return a verified kit;
 - 10 m² bare-new-plaster white ceiling request must preserve the stabilized preparation and roller behavior;
 - delivery question must use the knowledge path;
-- bathroom sealant and gun must not claim 280 ml compatibility with a gun documented only for 310/400 ml cartridges.
+- bathroom sealant and gun must not claim unverified cartridge compatibility.
 
 Confirm card links, category links, stock, price formatting and VAT line breaks.
 
@@ -72,4 +91,4 @@ For successful product requests confirm:
 
 ## Release decision
 
-Keep PR #2 Draft until the routing evaluation, browser regressions, fallback test and representative trace review pass. Do not merge PR #1 or PR #2 without explicit approval.
+Acceptance passed for code commit `85b0fe9`. Keep PR #2 Draft and do not merge PR #1 or PR #2 without explicit approval.

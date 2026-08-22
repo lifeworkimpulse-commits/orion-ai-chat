@@ -1,21 +1,26 @@
 # Changelog
 
-## 0.13.0 — Open Semantic Planning (development)
+## 0.13.0 — Open Semantic Planning (release candidate)
 
 - Started a separate development branch without merging the `0.12.0` draft pull request.
-- Bumped the plugin development version to `0.13.0`; the database schema remains `0.9.0`.
+- Bumped the plugin version to `0.13.0`; the database schema remains `0.9.0`.
 - Opened the semantic need contract so the AI can create safe free-form product need keys instead of choosing from a closed canonical-role enum.
 - Preserved known roles as optional hints for specialist validators, ordering and the existing `0.12.0` compatibility layer.
 - Added per-need live catalogue candidate groups for known and previously unseen product types.
 - Required every accepted AI selection to identify explicit catalogue evidence and use high or medium confidence.
 - Separated direct product-function evidence from unresolved size, fit, capacity and cross-product compatibility claims.
-- Added one bounded text compliance review for unresolved direct function matches.
+- Added one bounded text compliance review for unresolved required or core function matches.
 - Added trace-level selection evidence, confidence, uncertainty and safe usage metrics.
 - Added bounded optional OpenRouter vision review for at most three unresolved live product candidates; unsupported or failed vision safely retains the text result.
 - Restricted image evidence to visible product type and visible components, never hidden contents, dimensions, capacity, coverage, technical suitability or compatibility.
+- Added conservative multimodal capability detection; unverified models remain text-only unless explicitly enabled.
+- Added safe recovery from malformed or truncated tool-call JSON and stage-specific output budgets for routing, selection and final answers.
+- Added semantic canonical hints for known painting functions while preserving previously unseen product needs as open keys.
+- Preserved new-plaster preparation evidence, negated surface conditions and quantity uncertainty across routing and product selection.
 - Expanded the live routing evaluation from 9 to 14 scenarios, including five previously unseen open product needs.
 - Added a documented `0.13.0` acceptance workflow and richer read-only diagnostics.
 - Kept deterministic validation as a safety and evidence layer rather than a catalogue-domain decision engine.
+- Acceptance-frozen the code baseline at `85b0fe9` after the final OpenRouter evaluation passed 14/14 on 2026-08-22.
 
 ## 0.12.0 — Stabilization
 
