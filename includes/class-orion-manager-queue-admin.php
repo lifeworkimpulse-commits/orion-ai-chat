@@ -1,0 +1,218 @@
+<?php
+if (!defined('ABSPATH')) { exit; }
+
+final class Orion_Manager_Queue_Admin {
+    private Orion_Conversation_Service $conversations;
+    private Orion_Manager_Handoff $queue;
+
+    public function __construct(Orion_Conversation_Service $conversations) {
+        $this->conversations = $conversations;
+        $this->queue = new Orion_Manager_Handoff();
+    }
+
+    public function register(): void {
+        add_action('admin_post_orion_ai_update_handoff', array($this, 'handle_update'));
+        add_action('admin_post_orion_ai_resolve_handoff', array($this, 'handle_legacy_resolve'));
+    }
+
+    public function render(): void {
+        if (!current_user_can('manage_woocommerce')) return;
+
+        $status = sanitize_key(wp_unslash($_GET['queue_status'] ?? ''));
+        $priority = sanitize_key(wp_unslash($_GET['queue_priority'] ?? ''));
+        $owner = sanitize_key(wp_unslash($_GET['queue_owner'] ?? ''));
+        $filters = array();
+        if (Orion_Manager_Queue_Policy::is_status($status)) $filters['status'] = $status;
+        if (in_array($priority, Orion_Manager_Queue_Policy::priorities(), true)) $filters['priority'] = $priority;
+        if ($owner === 'mine') $filters['assigned_user_id'] = get_current_user_id();
+
+        $counts = $this->queue->counts();
+        $items = $this->queue->all(100, $filters);
+
+        echo '<section class="orion-card orion-queue"><h2>Manager follow-up queue</h2>';
+        echo '<p>Review only requests that Orion could not answer from confirmed store or catalogue evidence. Manager notes remain private.</p>';
+        $this->render_counts($counts, $status, $priority, $owner);
+        $this->render_filters($status, $priority, $owner);
+
+        if (!$items) echo '<p class="orion-queue-empty">No requests match these filters.</p>';
+        foreach ($items as $item) $this->render_item($item);
+
+        echo '</section>';
+        echo '<style>
+        .orion-admin .orion-queue{max-width:1200px}
+        .orion-queue-counts{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}
+        .orion-queue-count{display:inline-flex;gap:7px;align-items:center;padding:7px 11px;border:1px solid #c3c4c7;border-radius:999px;background:#fff;text-decoration:none}
+        .orion-queue-count.is-active{border-color:#2271b1;background:#f0f6fc}
+        .orion-queue-count strong{font-size:14px}
+        .orion-queue-filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:14px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:8px}
+        .orion-queue-filters label{display:grid;gap:4px}
+        .orion-queue-item{margin-top:16px;padding:18px;border:1px solid #dcdcde;border-left:5px solid #72aee6;border-radius:8px;background:#fff}
+        .orion-queue-item.is-urgent{border-left-color:#d63638}
+        .orion-queue-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
+        .orion-queue-meta{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+        .orion-queue-badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#f0f0f1;font-size:12px}
+        .orion-queue-badge.is-urgent{background:#fcf0f1;color:#8a2424}
+        .orion-queue-question{font-size:15px;line-height:1.55}
+        .orion-queue-form{display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid #eee}
+        .orion-queue-form textarea{width:100%;min-height:88px}
+        .orion-queue-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
+        .orion-queue-empty{padding:20px;background:#f6f7f7;border-radius:8px}
+        @media(max-width:782px){.orion-queue-head,.orion-queue-form{display:block}.orion-queue-form>*{margin-top:10px}}
+        </style>';
+    }
+
+    private function render_counts(array $counts, string $active, string $priority, string $owner): void {
+        echo '<div class="orion-queue-counts">';
+        $all = array_sum($counts);
+        $this->count_link('', 'All', $all, $active === '', $priority, $owner);
+        foreach (Orion_Manager_Queue_Policy::statuses() as $status) {
+            $this->count_link($status, $this->status_label($status), (int)($counts[$status] ?? 0), $active === $status, $priority, $owner);
+        }
+        echo '</div>';
+    }
+
+    private function count_link(string $status, string $label, int $count, bool $active, string $priority, string $owner): void {
+        $args = array('page' => 'orion-ai-assistant', 'tab' => 'handoffs');
+        if ($status !== '') $args['queue_status'] = $status;
+        if ($priority !== '') $args['queue_priority'] = $priority;
+        if ($owner !== '') $args['queue_owner'] = $owner;
+        $url = add_query_arg($args, admin_url('admin.php'));
+        echo '<a class="orion-queue-count ' . ($active ? 'is-active' : '') . '" href="' . esc_url($url) . '"><span>' . esc_html($label) . '</span><strong>' . $count . '</strong></a>';
+    }
+
+    private function render_filters(string $status, string $priority, string $owner): void {
+        echo '<form class="orion-queue-filters" method="get" action="' . esc_url(admin_url('admin.php')) . '">';
+        echo '<input type="hidden" name="page" value="orion-ai-assistant"><input type="hidden" name="tab" value="handoffs">';
+        echo '<label><strong>Status</strong><select name="queue_status"><option value="">All statuses</option>';
+        foreach (Orion_Manager_Queue_Policy::statuses() as $value) {
+            echo '<option value="' . esc_attr($value) . '" ' . selected($status, $value, false) . '>' . esc_html($this->status_label($value)) . '</option>';
+        }
+        echo '</select></label><label><strong>Priority</strong><select name="queue_priority"><option value="">All priorities</option>';
+        foreach (Orion_Manager_Queue_Policy::priorities() as $value) {
+            echo '<option value="' . esc_attr($value) . '" ' . selected($priority, $value, false) . '>' . esc_html(ucfirst($value)) . '</option>';
+        }
+        echo '</select></label><label><strong>Owner</strong><select name="queue_owner"><option value="">Everyone</option><option value="mine" ' . selected($owner, 'mine', false) . '>Assigned to me</option></select></label>';
+        echo '<button class="button">Filter</button><a class="button" href="' . esc_url(add_query_arg(array('page'=>'orion-ai-assistant','tab'=>'handoffs'), admin_url('admin.php'))) . '">Reset</a></form>';
+    }
+
+    private function render_item(array $item): void {
+        $id = (int)$item['id'];
+        $status = (string)$item['status'];
+        $priority = Orion_Manager_Queue_Policy::normalize_priority((string)($item['priority'] ?? ''));
+        $context = json_decode((string)($item['context_json'] ?? ''), true);
+        $context = is_array($context) ? $context : array();
+        $trace_id = absint($item['trace_id'] ?? ($context['trace_id'] ?? 0));
+        $reason = sanitize_key((string)($item['reason_code'] ?? ($context['failure_stage'] ?? 'manager_follow_up')));
+        $assigned = absint($item['assigned_user_id'] ?? 0);
+        $user = $assigned ? get_userdata($assigned) : false;
+        $owner = $user ? $user->display_name : ($assigned ? 'User #' . $assigned : 'Unassigned');
+
+        echo '<article class="orion-queue-item ' . ($priority === 'urgent' ? 'is-urgent' : '') . '">';
+        echo '<div class="orion-queue-head"><div><h3 style="margin:0">Request #' . $id . '</h3><div class="orion-queue-meta">';
+        echo '<span class="orion-queue-badge">' . esc_html($this->status_label($status)) . '</span>';
+        echo '<span class="orion-queue-badge ' . ($priority === 'urgent' ? 'is-urgent' : '') . '">' . esc_html(ucfirst($priority)) . '</span>';
+        echo '<span class="orion-queue-badge">' . esc_html(str_replace('_', ' ', $reason)) . '</span>';
+        echo '<span class="orion-queue-badge">' . esc_html($owner) . '</span></div></div>';
+        echo '<small>Created ' . esc_html((string)$item['created_at']) . '<br>Updated ' . esc_html((string)$item['updated_at']) . '</small></div>';
+        echo '<p class="orion-queue-question">' . nl2br(esc_html((string)$item['question'])) . '</p>';
+
+        if ($trace_id > 0) {
+            $trace_url = add_query_arg(array('page'=>'orion-ai-assistant','tab'=>'traces','trace_id'=>$trace_id), admin_url('admin.php'));
+            echo '<p><a class="button button-small" href="' . esc_url($trace_url) . '">Open trace #' . $trace_id . '</a></p>';
+        }
+
+        if ($context) {
+            echo '<details><summary>Diagnostic context</summary><pre style="white-space:pre-wrap;max-height:420px;overflow:auto">' . esc_html(wp_json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</pre></details>';
+        }
+
+        echo '<form class="orion-queue-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        wp_nonce_field('orion_ai_update_handoff_' . $id);
+        echo '<input type="hidden" name="action" value="orion_ai_update_handoff"><input type="hidden" name="handoff_id" value="' . $id . '">';
+        echo '<label><strong>Priority</strong><select name="priority">';
+        foreach (Orion_Manager_Queue_Policy::priorities() as $value) {
+            echo '<option value="' . esc_attr($value) . '" ' . selected($priority, $value, false) . '>' . esc_html(ucfirst($value)) . '</option>';
+        }
+        echo '</select></label><label><strong>Private manager note</strong><textarea name="resolution_note" maxlength="2000" placeholder="Record the decision, confirmed product, policy source or reason for dismissal.">' . esc_textarea((string)($item['resolution_note'] ?? '')) . '</textarea></label>';
+        echo '<div class="orion-queue-actions"><button class="button" name="queue_action" value="save">Save details</button>';
+        if ($status === Orion_Manager_Queue_Policy::STATUS_NEW) echo '<button class="button button-primary" name="queue_action" value="claim">Claim</button>';
+        if ($status === Orion_Manager_Queue_Policy::STATUS_IN_PROGRESS) echo '<button class="button" name="queue_action" value="reopen">Return to new</button>';
+        if (!Orion_Manager_Queue_Policy::is_terminal($status)) {
+            echo '<button class="button button-primary" name="queue_action" value="resolve">Resolve</button>';
+            echo '<button class="button button-link-delete" name="queue_action" value="dismiss" onclick="return confirm(\'Dismiss this request?\')">Dismiss</button>';
+        } else {
+            echo '<button class="button button-primary" name="queue_action" value="reopen">Reopen</button>';
+        }
+        echo '</div></form></article>';
+    }
+
+    public function handle_update(): void {
+        if (!current_user_can('manage_woocommerce')) wp_die('Forbidden');
+        $id = absint($_POST['handoff_id'] ?? 0);
+        check_admin_referer('orion_ai_update_handoff_' . $id);
+
+        $item = $this->queue->get($id);
+        if (!$item) $this->redirect('Queue item was not found.');
+
+        $action = sanitize_key(wp_unslash($_POST['queue_action'] ?? 'save'));
+        $note = sanitize_textarea_field(wp_unslash($_POST['resolution_note'] ?? ''));
+        $note = mb_substr($note, 0, 2000);
+        $priority = Orion_Manager_Queue_Policy::normalize_priority(sanitize_key(wp_unslash($_POST['priority'] ?? 'normal')));
+        $current = (string)$item['status'];
+        $target = $current;
+        $user_id = 0;
+
+        if ($action === 'claim') { $target = Orion_Manager_Queue_Policy::STATUS_IN_PROGRESS; $user_id = get_current_user_id(); }
+        elseif ($action === 'resolve') { $target = Orion_Manager_Queue_Policy::STATUS_RESOLVED; $user_id = get_current_user_id(); }
+        elseif ($action === 'dismiss') { $target = Orion_Manager_Queue_Policy::STATUS_DISMISSED; $user_id = get_current_user_id(); }
+        elseif ($action === 'reopen') { $target = Orion_Manager_Queue_Policy::STATUS_NEW; }
+        elseif ($action !== 'save') $this->redirect('Unknown queue action.');
+
+        if (Orion_Manager_Queue_Policy::is_terminal($target) && trim($note) === '') {
+            $this->redirect('Add a private manager note before resolving or dismissing the request.');
+        }
+
+        $ok = $this->queue->transition($id, $target, $note, $user_id, $priority);
+        if ($ok) {
+            $this->conversations->record_event('manager_queue_updated', array(
+                'handoff_id' => $id,
+                'from_status' => $current,
+                'to_status' => $target,
+                'priority' => $priority,
+                'actor_user_id' => get_current_user_id(),
+            ), (int)$item['conversation_id']);
+        }
+        $this->redirect($ok ? 'Manager queue updated.' : 'The requested queue transition was not allowed.');
+    }
+
+    public function handle_legacy_resolve(): void {
+        if (!current_user_can('manage_woocommerce')) wp_die('Forbidden');
+        check_admin_referer('orion_ai_resolve_handoff');
+        $id = absint($_POST['handoff_id'] ?? 0);
+        $item = $this->queue->get($id);
+        $ok = $item && $this->queue->resolve($id);
+        if ($ok) {
+            $this->conversations->record_event('manager_queue_updated', array(
+                'handoff_id' => $id,
+                'from_status' => (string)$item['status'],
+                'to_status' => Orion_Manager_Queue_Policy::STATUS_RESOLVED,
+                'priority' => (string)($item['priority'] ?? 'normal'),
+                'actor_user_id' => get_current_user_id(),
+                'legacy_action' => true,
+            ), (int)$item['conversation_id']);
+        }
+        $this->redirect($ok ? 'Follow-up marked resolved.' : 'Follow-up could not be updated.');
+    }
+
+    private function redirect(string $message): void {
+        wp_safe_redirect(add_query_arg(array(
+            'page' => 'orion-ai-assistant',
+            'tab' => 'handoffs',
+            'orion_notice' => $message,
+        ), admin_url('admin.php')));
+        exit;
+    }
+
+    private function status_label(string $status): string {
+        return ucwords(str_replace('_', ' ', $status));
+    }
+}

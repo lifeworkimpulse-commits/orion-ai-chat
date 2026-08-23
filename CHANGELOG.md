@@ -7,7 +7,9 @@
 - Added conservative `normal` and manager-assigned `urgent` priorities.
 - Extended handoff storage with trace ID, reason code, assignee, resolution note and completion time.
 - Added filtered queue retrieval, status counts and validated workflow transitions.
-- Preserved the existing manager follow-up screen and backwards-compatible resolve action for the first stage.
+- Added an admin manager workspace with status counters, filters, assignment, private notes and trace links.
+- Added capability and item-specific nonce checks for claim, resolve, dismiss and reopen actions.
+- Added aggregate audit events for successful queue changes without copying private manager notes into analytics.
 - Bumped the plugin version to `0.14.0` and the database schema to `0.10.0`.
 
 ## 0.13.0 — Open Semantic Planning (release candidate)

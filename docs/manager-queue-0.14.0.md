@@ -28,13 +28,15 @@ Each item stores:
 ## Safety rules
 
 - Only users with `manage_woocommerce` may view or mutate queue items.
-- All writes require a WordPress nonce and server-side transition validation.
+- All writes require an item-specific WordPress nonce and server-side transition validation.
+- Inputs are sanitized and all queue output is escaped.
 - Customer-facing REST endpoints never expose queue context, traces or manager notes.
 - An item is not automatically marked urgent from model output.
 - Resolving a queue item does not automatically publish an answer or alter the knowledge base.
 - Terminal items may only be reopened to `new`; direct terminal-to-terminal changes are rejected.
+- Resolve and dismiss actions require a private manager note.
 
-## Delivery stages
+## Delivered stages
 
 ### Stage 1 — Queue domain and storage
 
@@ -47,18 +49,23 @@ Each item stores:
 
 ### Stage 2 — Manager workspace
 
-- status and priority filters;
-- queue counters;
-- claim, resolve, dismiss and reopen actions;
-- manager notes;
-- trace links and concise evidence summary;
-- capability, nonce, sanitization and escaping checks.
+- status counters and filters;
+- priority and current-manager filters;
+- claim, save, resolve, dismiss and reopen actions;
+- private manager notes;
+- assignee visibility;
+- direct links to originating traces;
+- compact reason and timestamp metadata;
+- capability, nonce, sanitization and escaping checks;
+- aggregate audit event for every successful queue update.
+
+## Remaining stages
 
 ### Stage 3 — Resolution workflow
 
 - optional approved response draft;
 - explicit manager action before any customer-visible response;
-- event/audit history;
+- detailed per-item audit history;
 - no automatic knowledge-base publication.
 
 ### Stage 4 — Operations and acceptance
