@@ -1,11 +1,39 @@
 <?php
 if(!defined('ABSPATH')){exit;}
 if(!defined('WP_CLI')||!WP_CLI){return;}
+
 final class Orion_Manager_Queue_CLI_Command{
- public function stats(array $args,array $assoc_args):void{$gaps=new Orion_Manager_Handoff();$rows=array();foreach($gaps->counts()as$status=>$total)$rows[]=array('group'=>'status','value'=>$status,'count'=>$total);foreach($gaps->reason_counts()as$row)$rows[]=array('group'=>'reason','value'=>(string)$row['reason_code'],'count'=>(int)$row['total']);WP_CLI\Utils\format_items($this->format($assoc_args),$rows,array('group','value','count'));}
- /** @subcommand list */
- public function list_items(array $args,array $assoc_args):void{$filters=array();$status=sanitize_key((string)($assoc_args['status']??''));$reason=sanitize_key((string)($assoc_args['reason']??''));if($status!==''&&!Orion_Manager_Queue_Policy::is_status($status))WP_CLI::error('Unknown status.');if($status!=='')$filters['status']=$status;if($reason!=='')$filters['reason_code']=$reason;$items=(new Orion_Manager_Handoff())->all(max(1,min(200,absint($assoc_args['limit']??50))),$filters);$rows=array();foreach($items as$item){$row=array('id'=>(int)$item['id'],'conversation_id'=>(int)$item['conversation_id'],'trace_id'=>(int)($item['trace_id']??0),'status'=>(string)$item['status'],'reason_code'=>(string)$item['reason_code'],'knowledge_document_id'=>(int)($item['knowledge_document_id']??0),'created_at'=>(string)$item['created_at']);if(!empty($assoc_args['details']))$row['question']=(string)$item['question'];$rows[]=$row;}$fields=array('id','conversation_id','trace_id','status','reason_code','knowledge_document_id','created_at');if(!empty($assoc_args['details']))$fields[]='question';WP_CLI\Utils\format_items($this->format($assoc_args),$rows,$fields);}
- public function show(array $args,array $assoc_args):void{$id=absint($args[0]??0);if(!$id)WP_CLI::error('Provide a knowledge gap ID.');$gaps=new Orion_Manager_Handoff();$item=$gaps->get($id);if(!$item)WP_CLI::error('Knowledge gap #'.$id.' does not exist.');$summary=array('id'=>(int)$item['id'],'conversation_id'=>(int)$item['conversation_id'],'trace_id'=>(int)($item['trace_id']??0),'status'=>(string)$item['status'],'reason_code'=>(string)$item['reason_code'],'knowledge_document_id'=>(int)($item['knowledge_document_id']??0),'knowledge_published_at'=>$item['knowledge_published_at']??null,'created_at'=>(string)$item['created_at'],'updated_at'=>(string)$item['updated_at'],'history'=>$gaps->history($id,50));if(!empty($assoc_args['details'])){$summary['question']=(string)$item['question'];$summary['knowledge_title']=(string)($item['knowledge_title']??'');$summary['verified_guidance']=(string)($item['resolution_note']??'');$summary['source_url']=(string)($item['knowledge_source_url']??'');$context=json_decode((string)($item['context_json']??''),true);$summary['diagnostic_context']=is_array($context)?$context:array();}WP_CLI::log(wp_json_encode($summary,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));}
+ /** Show counts by workflow status and failure reason. */
+ public function stats(array $args,array $assoc_args):void{
+  $gaps=new Orion_Manager_Handoff();$rows=array();
+  foreach($gaps->counts()as$status=>$total)$rows[]=array('group'=>'status','value'=>$status,'count'=>$total);
+  foreach($gaps->reason_counts()as$row)$rows[]=array('group'=>'reason','value'=>(string)$row['reason_code'],'count'=>(int)$row['total']);
+  WP_CLI\Utils\format_items($this->format($assoc_args),$rows,array('group','value','count'));
+ }
+
+ /**
+  * List AI knowledge gaps. Private customer text requires --details.
+  *
+  * @subcommand list
+  */
+ public function list_items(array $args,array $assoc_args):void{
+  $filters=array();$status=sanitize_key((string)($assoc_args['status']??''));$reason=sanitize_key((string)($assoc_args['reason']??''));
+  if($status!==''&&!Orion_Manager_Queue_Policy::is_status($status))WP_CLI::error('Unknown status.');
+  if($status!=='')$filters['status']=$status;if($reason!=='')$filters['reason_code']=$reason;
+  $items=(new Orion_Manager_Handoff())->all(max(1,min(200,absint($assoc_args['limit']??50))),$filters);$rows=array();
+  foreach($items as$item){$row=array('id'=>(int)$item['id'],'conversation_id'=>(int)$item['conversation_id'],'trace_id'=>(int)($item['trace_id']??0),'status'=>(string)$item['status'],'reason_code'=>(string)$item['reason_code'],'knowledge_document_id'=>(int)($item['knowledge_document_id']??0),'created_at'=>(string)$item['created_at']);if(!empty($assoc_args['details']))$row['question']=(string)$item['question'];$rows[]=$row;}
+  $fields=array('id','conversation_id','trace_id','status','reason_code','knowledge_document_id','created_at');if(!empty($assoc_args['details']))$fields[]='question';
+  WP_CLI\Utils\format_items($this->format($assoc_args),$rows,$fields);
+ }
+
+ /** Show one AI knowledge gap. Private review content requires --details. */
+ public function show(array $args,array $assoc_args):void{
+  $id=absint($args[0]??0);if(!$id)WP_CLI::error('Provide a knowledge gap ID.');$gaps=new Orion_Manager_Handoff();$item=$gaps->get($id);if(!$item)WP_CLI::error('Knowledge gap #'.$id.' does not exist.');
+  $summary=array('id'=>(int)$item['id'],'conversation_id'=>(int)$item['conversation_id'],'trace_id'=>(int)($item['trace_id']??0),'status'=>(string)$item['status'],'reason_code'=>(string)$item['reason_code'],'knowledge_document_id'=>(int)($item['knowledge_document_id']??0),'knowledge_published_at'=>$item['knowledge_published_at']??null,'created_at'=>(string)$item['created_at'],'updated_at'=>(string)$item['updated_at'],'history'=>$gaps->history($id,50));
+  if(!empty($assoc_args['details'])){$summary['question']=(string)$item['question'];$summary['knowledge_title']=(string)($item['knowledge_title']??'');$summary['verified_guidance']=(string)($item['resolution_note']??'');$summary['source_url']=(string)($item['knowledge_source_url']??'');$context=json_decode((string)($item['context_json']??''),true);$summary['diagnostic_context']=is_array($context)?$context:array();}
+  WP_CLI::log(wp_json_encode($summary,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+ }
+
  private function format(array $args):string{$format=sanitize_key((string)($args['format']??'table'));return in_array($format,array('table','json','csv','yaml'),true)?$format:'table';}
 }
 WP_CLI::add_command('orion-ai gaps','Orion_Manager_Queue_CLI_Command');
