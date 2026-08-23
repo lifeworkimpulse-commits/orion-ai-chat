@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.0 — Manager Queue (development)
+
+- Started a separate branch from the accepted and frozen `0.13.0` line.
+- Added a queue-domain policy for `new`, `in_progress`, `resolved` and `dismissed` states.
+- Added conservative `normal` and manager-assigned `urgent` priorities.
+- Extended handoff storage with trace ID, reason code, assignee, resolution note and completion time.
+- Added filtered queue retrieval, status counts and validated workflow transitions.
+- Preserved the existing manager follow-up screen and backwards-compatible resolve action for the first stage.
+- Bumped the plugin version to `0.14.0` and the database schema to `0.10.0`.
+
 ## 0.13.0 — Open Semantic Planning (release candidate)
 
 - Started a separate development branch without merging the `0.12.0` draft pull request.
