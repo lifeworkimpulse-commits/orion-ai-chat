@@ -9,66 +9,56 @@ Turn manager follow-up from a terminal chatbot response into an operational, aud
 - Base: accepted `0.13.0` code commit `85b0fe9` plus documentation freeze `6624face`.
 - Development branch: `feature/manager-queue-0.14.0`.
 - Plugin version: `0.14.0`.
-- Schema version: `0.10.0`.
+- Schema version: `0.11.0`.
 - The `0.13.0` branch remains frozen and unmerged.
 
 ## Queue contract
 
-Each item stores:
-
-- customer question and conversation ID;
-- originating trace ID;
-- deterministic reason code / failure stage;
-- status: `new`, `in_progress`, `resolved` or `dismissed`;
-- priority: `normal` or manager-assigned `urgent`;
-- assigned WordPress user;
-- resolution note and completion timestamp;
-- existing redacted diagnostic context.
+Each item stores the customer question, conversation and trace IDs, deterministic reason code, status, priority, assignee, private resolution note, optional customer response and approval/delivery timestamps. A dedicated event table records queue state changes without copying private note or response text into analytics.
 
 ## Safety rules
 
 - Only users with `manage_woocommerce` may view or mutate queue items.
 - All writes require an item-specific WordPress nonce and server-side transition validation.
 - Inputs are sanitized and all queue output is escaped.
-- Customer-facing REST endpoints never expose queue context, traces or manager notes.
-- An item is not automatically marked urgent from model output.
-- Resolving a queue item does not automatically publish an answer or alter the knowledge base.
+- Customer-facing REST endpoints never expose queue context, traces or private manager notes.
+- An item is never marked urgent from model output.
+- Draft responses remain private until a manager explicitly approves the exact text.
+- Only approved response text is delivered, once, on the next successful message in the same conversation.
+- Provider failures and session-limit errors do not consume an approved response.
+- Dismissing an item cancels a pending approved response.
+- Resolving or approving an item never modifies the knowledge base.
 - Terminal items may only be reopened to `new`; direct terminal-to-terminal changes are rejected.
-- Resolve and dismiss actions require a private manager note.
 
 ## Delivered stages
 
 ### Stage 1 — Queue domain and storage
 
-- schema migration;
-- structured queue metadata;
+- structured queue metadata and schema migration;
 - safe status-transition policy;
 - filtered repository methods and status counts;
-- backwards-compatible `resolve()` behavior;
-- unit tests for the transition policy.
+- backwards-compatible resolve behavior;
+- unit tests for queue and response states.
 
 ### Stage 2 — Manager workspace
 
 - status counters and filters;
 - priority and current-manager filters;
 - claim, save, resolve, dismiss and reopen actions;
-- private manager notes;
-- assignee visibility;
-- direct links to originating traces;
-- compact reason and timestamp metadata;
-- capability, nonce, sanitization and escaping checks;
-- aggregate audit event for every successful queue update.
+- private manager notes, assignee visibility and trace links;
+- capability, nonce, sanitization and escaping checks.
 
-## Remaining stages
+### Stage 3 — Approved response workflow
 
-### Stage 3 — Resolution workflow
-
-- optional approved response draft;
-- explicit manager action before any customer-visible response;
-- detailed per-item audit history;
+- separate private note and customer-response fields;
+- explicit draft and approve actions;
+- one-time delivery to the originating conversation;
+- response status: `none`, `draft`, `approved`, `delivered`;
+- per-item activity history;
+- aggregate events that contain IDs and state only, never response text;
 - no automatic knowledge-base publication.
 
-### Stage 4 — Operations and acceptance
+## Remaining Stage 4 — Operations and acceptance
 
 - WP-CLI queue diagnostics;
 - retention behavior;
