@@ -9,10 +9,12 @@
 - Added filtered queue retrieval, status counts and validated workflow transitions.
 - Added an admin manager workspace with status counters, filters, assignment, private notes and trace links.
 - Added capability and item-specific nonce checks for claim, resolve, dismiss and reopen actions.
-- Added explicit customer-response drafts, approval and one-time delivery to the originating conversation.
+- Added explicit customer-response drafts, approval and one-time delivery to the originating retained session.
+- Added same-visitor validation when resuming delivery through a previous session token.
 - Added per-item queue activity history without storing private note or response text in event payloads.
-- Added aggregate audit events for successful queue changes and manager-response delivery.
-- Prevented dismissed requests from delivering previously approved responses.
+- Added read-only WP-CLI queue statistics, listings and item diagnostics with private text hidden by default.
+- Added terminal queue retention, dedicated event cleanup and approved-response expiration before old conversations are removed.
+- Prevented dismissed or expired requests from delivering previously approved responses.
 - Bumped the plugin version to `0.14.0` and the database schema to `0.11.0`.
 
 ## 0.13.0 — Open Semantic Planning (release candidate)

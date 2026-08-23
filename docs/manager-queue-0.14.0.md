@@ -24,9 +24,11 @@ Each item stores the customer question, conversation and trace IDs, deterministi
 - Customer-facing REST endpoints never expose queue context, traces or private manager notes.
 - An item is never marked urgent from model output.
 - Draft responses remain private until a manager explicitly approves the exact text.
-- Only approved response text is delivered, once, on the next successful message in the same conversation.
+- Only approved response text is delivered, once, on the next successful message for the originating retained session.
+- A previous session token is accepted only when it belongs to the same hashed visitor identity.
 - Provider failures and session-limit errors do not consume an approved response.
 - Dismissing an item cancels a pending approved response.
+- Expired conversations cannot accept or deliver an approved response.
 - Resolving or approving an item never modifies the knowledge base.
 - Terminal items may only be reopened to `new`; direct terminal-to-terminal changes are rejected.
 
@@ -52,15 +54,19 @@ Each item stores the customer question, conversation and trace IDs, deterministi
 
 - separate private note and customer-response fields;
 - explicit draft and approve actions;
-- one-time delivery to the originating conversation;
-- response status: `none`, `draft`, `approved`, `delivered`;
+- one-time delivery to the originating retained session;
+- response status: `none`, `draft`, `approved`, `delivered`, `expired`;
 - per-item activity history;
-- aggregate events that contain IDs and state only, never response text;
+- aggregate events containing IDs and state only, never response text;
 - no automatic knowledge-base publication.
 
-## Remaining Stage 4 — Operations and acceptance
+### Stage 4 — Operations and acceptance
 
-- WP-CLI queue diagnostics;
-- retention behavior;
+- read-only `wp orion-ai queue stats|list|show` diagnostics;
+- private CLI fields hidden unless `--details` is explicitly requested;
+- terminal queue retention and event cleanup;
+- approved-response expiration before old conversations are deleted;
 - browser acceptance workflow;
-- regression evaluation against the frozen 14-case suite.
+- frozen 14-case semantic regression gate.
+
+See `docs/acceptance-0.14.0.md` for local validation.
