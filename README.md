@@ -4,9 +4,13 @@ Private WooCommerce plugin that provides a grounded AI shopping assistant throug
 
 ## Current development line
 
-`0.14.0` develops an operational Manager Queue on top of the accepted `0.13.0` semantic-planning baseline. It adds manager assignment, status and priority workflows, private notes, trace links, explicit response drafts and approvals, one-time customer delivery, audit history and read-only WP-CLI diagnostics.
+`0.14.0` adds conversation review and a safe AI Knowledge Gaps workflow on top of the accepted `0.13.0` semantic-planning baseline.
 
-`0.13.0` remains the acceptance-frozen code baseline at commit `85b0fe9`. The `0.12.0`, `0.13.0` and `0.14.0` pull requests remain draft and are not merged.
+Managers can review every retained customer/AI dialogue. Requests Orion cannot answer are collected as gaps with their trace and failure reason. A manager can write separate verified guidance, attach an optional source URL and explicitly index only that reviewed guidance in the Knowledge Base.
+
+Customers continue to communicate only with AI. There is no manager-response delivery workflow, and customer messages are never published to the knowledge base automatically.
+
+`0.13.0` remains the acceptance-frozen code baseline at commit `85b0fe9`. Pull requests remain draft and unmerged.
 
 ## Requirements
 
@@ -18,9 +22,9 @@ Private WooCommerce plugin that provides a grounded AI shopping assistant throug
 
 ## Local installation
 
-Clone the repository into `wp-content/plugins/orion-ai-assistant`, activate it, then open **WooCommerce → AI Assistant**.
+Clone into `wp-content/plugins/orion-ai-assistant`, activate, then open **WooCommerce → AI Assistant**.
 
-For production, keep credentials in `wp-config.php`:
+Keep production credentials in `wp-config.php`:
 
 ```php
 define('ORION_AI_OPENROUTER_KEY','your-key');
@@ -38,7 +42,7 @@ composer analyse
 composer lint
 ```
 
-CI validates PHP 8.0–8.3, PHP syntax, unit tests, static analysis, JavaScript syntax and evaluation JSON.
+CI validates PHP 8.0–8.3, unit tests, static analysis, JavaScript syntax and evaluation JSON.
 
 ## Operations
 
@@ -49,29 +53,26 @@ wp orion-ai catalogue-index --apply
 wp orion-ai catalogue-audit --details
 wp orion-ai evaluate --provider=openrouter --model=<model>
 wp orion-ai diagnose --message="<prompt>"
-wp orion-ai queue stats
-wp orion-ai queue list --status=new
-wp orion-ai queue show <id>
+wp orion-ai gaps stats
+wp orion-ai gaps list --status=new
+wp orion-ai gaps show <id>
 ```
 
-Queue list and show commands omit private customer, manager and diagnostic text by default. Use `--details` only on a trusted console when that text is intentionally required.
+Gap commands omit private text by default. Use `--details` only on a trusted console.
 
 ## Architecture
 
-- AI produces an open list of project needs from arbitrary customer language.
-- Known roles remain optional hints and validator hooks, not a closed allowlist.
+- AI creates open product needs from arbitrary customer language.
 - Every need receives its own live WooCommerce candidate set.
-- AI selections require explicit catalogue evidence and high or medium confidence.
-- Function evidence is separated from unresolved size, fit, capacity and compatibility details.
-- Verified multimodal models may review images only after text processing leaves an unresolved required or core need.
-- Deterministic code remains responsible for live IDs, stock, price, candidate membership, specialist compatibility checks and unsupported-claim prevention.
-- Manager Queue receives only requests that cannot be answered safely from confirmed evidence.
-- Private manager notes and diagnostics remain admin-only.
-- Customer responses require explicit approval and are delivered at most once to the originating retained session.
-- No manager action publishes to the knowledge base automatically.
+- Accepted selections require explicit catalogue evidence.
+- Deterministic code validates IDs, stock, price, candidate membership and unsupported claims.
+- Every retained customer question and successful AI answer can be reviewed by authorized managers.
+- Unanswered requests and provider failures create AI gaps.
+- Knowledge publication requires separately written, verified guidance and explicit manager confirmation.
+- Customer dialogue, traces and diagnostics are never automatically used as knowledge.
 
 See `docs/open-semantic-planning-0.13.0.md`, `docs/manager-queue-0.14.0.md` and `docs/acceptance-0.14.0.md`.
 
 ## Privacy
 
-The plugin stores conversations, queue items, private manager notes, approved customer responses, usage metadata and operational events in custom tables. Configure finite retention and disclose AI processing in the store privacy policy. Terminal queue items are removed after retention; open work remains until a manager resolves or dismisses it. Approved responses expire when their retained source conversation is removed. Conditional vision review sends only public WooCommerce product image URLs and never customer-uploaded images.
+The plugin stores conversations, knowledge gaps, usage metadata and operational events in custom tables. Configure finite retention and disclose AI processing in the store privacy policy. Conversation access and knowledge publication require `manage_woocommerce`.

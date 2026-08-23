@@ -1,33 +1,50 @@
-# Orion AI Assistant 0.14.0 Manager Queue Acceptance
+# Orion AI Assistant 0.14.0 Acceptance
 
-This checklist validates the Manager Queue development line without merging any draft pull request.
+This checklist validates conversation review and safe knowledge-gap publishing. It does not test manager replies to customers because that workflow has been removed.
 
 ## 1. Update and migrate
 
 ```powershell
+Set-Location 'W:\domains\myorionchat.com\wp-content\plugins\orion-ai-assistant'
 git fetch origin
 git switch feature/manager-queue-0.14.0
 git pull origin feature/manager-queue-0.14.0
+git log -1 --oneline
+
 & 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai migrate --apply --path='W:\domains\myorionchat.com'
 & 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' option get orion_ai_schema_version --path='W:\domains\myorionchat.com'
 ```
 
-Expected schema: `0.11.0`.
+Expected schema: `0.12.0`.
 
-## 2. Static and operational checks
+## 2. Local checks
 
 ```powershell
 & 'W:\modules\php\PHP_8.1\php.exe' 'W:\userdata\composer\composer.phar' test
 & 'W:\modules\php\PHP_8.1\php.exe' 'W:\userdata\composer\composer.phar' analyse
-& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai queue stats --path='W:\domains\myorionchat.com'
-& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai queue list --limit=20 --path='W:\domains\myorionchat.com'
+& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai gaps stats --path='W:\domains\myorionchat.com'
 ```
 
-The default list must not print the customer question, private manager note, approved response or diagnostic context. Use `queue show ID --details` only on a trusted local console.
+## 3. Review all conversations
 
-## 3. Create a queue item
+1. Open the storefront chat in one browser tab.
+2. Send two or three ordinary questions and confirm Orion answers them.
+3. Open **WooCommerce → AI Assistant → Conversations** in the admin tab.
+4. Open the newest conversation.
 
-In a fresh browser chat, submit a request that cannot be confirmed from the live catalogue, for example:
+Pass conditions:
+
+- every customer question appears once;
+- every successful AI answer appears once and in order;
+- dates, message count and gap count are visible;
+- no client hash, session token or API key is rendered;
+- only a user with `manage_woocommerce` can access the screen.
+
+## 4. Create an unanswered knowledge gap
+
+Ask a real store-policy question for which the current knowledge base has no approved answer. Do not invent a policy merely for the test.
+
+Alternative technical trigger:
 
 ```text
 I need Orion product SKU MANAGER-QUEUE-TEST-DO-NOT-EXIST. Confirm its stock and manufacturer warranty.
@@ -35,75 +52,72 @@ I need Orion product SKU MANAGER-QUEUE-TEST-DO-NOT-EXIST. Confirm its stock and 
 
 Pass conditions:
 
-- the customer receives a manager follow-up reference number;
-- the queue item appears under **WooCommerce → AI Assistant → Manager queue**;
-- status is `New`;
-- priority is `Normal`;
-- reason code and originating trace link are present;
-- private manager note and customer response are separate fields.
+- Orion does not invent the product, stock or warranty;
+- Orion says the unanswered request was recorded for review;
+- **AI gaps** shows a new item;
+- the item links to the complete conversation and trace;
+- the failure reason is visible.
 
-## 4. Manager workflow
+## 5. Save a review without publishing
 
-1. Click **Claim** and confirm the item becomes `In progress` and is assigned to the current WordPress user.
-2. Change priority to `Urgent`, add a private note and save.
-3. Verify status, priority and owner filters.
-4. Save a customer response as a draft.
-5. Confirm draft text is not shown to the customer.
-6. Approve the exact customer response explicitly.
-7. In the same browser, send another successful chat message.
+In the gap enter:
+
+- a descriptive knowledge title;
+- separately written verified guidance;
+- an optional source URL.
+
+Click **Save review**.
 
 Pass conditions:
 
-- the response starts with `Update from our team for request #...`;
-- only the approved customer response is shown;
-- private notes and diagnostic context are absent;
-- a subsequent message does not repeat the manager response;
-- response status changes from `Draft` to `Approved` to `Delivered`;
-- activity history records claim, details, approval and delivery;
-- the trace response stage contains a non-zero `manager_response_id` only for the delivery request.
+- status becomes `Reviewing`;
+- the guidance is not yet present under Knowledge Base;
+- the original customer question has not been copied into a knowledge document;
+- no message is sent to the original customer.
 
-The previous session token may resume delivery after the normal chat timeout, but only when it belongs to the same visitor and the retained source conversation still exists.
+## 6. Publish verified guidance
 
-## 5. Resolve, dismiss and reopen
+Use a real, confirmed store fact. The guidance must contain at least 20 characters. Click **Add to knowledge base** and confirm.
 
-- Resolving and dismissing require a private manager note.
-- A resolved or dismissed item may be reopened only to `New`.
-- Direct `Resolved → Dismissed` and `Dismissed → Resolved` transitions must be rejected.
-- Dismissing an item with an approved but undelivered response must cancel delivery and return the response to draft state.
-- No queue action may publish content to the knowledge base automatically.
+Pass conditions:
 
-## 6. Read-only diagnostics
+- a manual knowledge document is created and indexed;
+- status becomes `Added to knowledge`;
+- the gap displays the linked document ID and publication time;
+- the document contains the manager-written guidance and optional source link only;
+- it does not contain the customer dialogue, trace or diagnostic context;
+- the review history records publication without copying the guidance text into its payload.
+
+Open **Knowledge base**, inspect the document, and edit or delete it if the test content should not remain in production knowledge.
+
+## 7. Verify future AI use
+
+For a real store-policy gap, start a new browser chat and ask the same question in different words.
+
+Expected result: Orion retrieves the reviewed document and answers only from its confirmed guidance. If the original gap concerned a missing catalogue product, adding policy guidance will not create that product; catalogue data must instead be corrected in WooCommerce.
+
+## 8. Ignore and reopen
+
+- Create another gap.
+- Click **Ignore gap** and confirm status `Ignored`.
+- Click **Reopen** and confirm status `New`.
+- No knowledge document should be created by either action.
+
+## 9. Read-only diagnostics
 
 ```powershell
-& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai queue stats --format=table --path='W:\domains\myorionchat.com'
-& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai queue list --status=in_progress --format=table --path='W:\domains\myorionchat.com'
-& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai queue show ID --path='W:\domains\myorionchat.com'
+& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai gaps list --limit=20 --path='W:\domains\myorionchat.com'
+& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai gaps show ID --path='W:\domains\myorionchat.com'
 ```
 
-Use `--details` only when private text is intentionally required.
+Default output must omit customer question, reviewed guidance and diagnostic context. Use `--details` only on the trusted local console.
 
-## 7. Retention
-
-```powershell
-& 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai cleanup --path='W:\domains\myorionchat.com'
-```
-
-This is a dry run unless `--apply` is supplied. Runtime cleanup must:
-
-- retain open queue items;
-- delete terminal queue items only after the configured retention period;
-- delete their dedicated history rows with them;
-- mark approved responses `Expired` before their retained source conversation is deleted;
-- never deliver an expired response.
-
-## 8. Regression evaluation
+## 10. Regression evaluation
 
 ```powershell
 & 'W:\modules\php\PHP_8.1\php.exe' 'W:\tools\wp-cli.phar' orion-ai evaluate --provider=openrouter --model='openai/gpt-5.6-luna' --path='W:\domains\myorionchat.com'
 ```
 
-Pass target: `14/14`. Manager Queue must not change the accepted routing, product selection, uncertainty or provider-fallback behavior from `0.13.0`.
+Pass target: `14/14`. Conversation logging and knowledge-gap capture must not change accepted product routing and selection.
 
-## Release decision
-
-Keep PR #3 Draft until migration, manager workflow, one-time delivery, cancellation, CLI diagnostics, retention behavior and the 14-case regression suite pass locally. Do not merge without explicit approval.
+Keep PR #3 Draft until browser review, safe publication and the frozen evaluation pass locally.
