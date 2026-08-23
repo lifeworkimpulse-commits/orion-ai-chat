@@ -10,6 +10,11 @@ final class Orion_Manager_Queue_Policy {
     public const PRIORITY_NORMAL = 'normal';
     public const PRIORITY_URGENT = 'urgent';
 
+    public const RESPONSE_NONE = 'none';
+    public const RESPONSE_DRAFT = 'draft';
+    public const RESPONSE_APPROVED = 'approved';
+    public const RESPONSE_DELIVERED = 'delivered';
+
     public static function statuses(): array {
         return array(
             self::STATUS_NEW,
@@ -23,12 +28,25 @@ final class Orion_Manager_Queue_Policy {
         return array(self::PRIORITY_NORMAL, self::PRIORITY_URGENT);
     }
 
+    public static function response_statuses(): array {
+        return array(
+            self::RESPONSE_NONE,
+            self::RESPONSE_DRAFT,
+            self::RESPONSE_APPROVED,
+            self::RESPONSE_DELIVERED,
+        );
+    }
+
     public static function is_status(string $status): bool {
         return in_array($status, self::statuses(), true);
     }
 
     public static function normalize_priority(string $priority): string {
         return in_array($priority, self::priorities(), true) ? $priority : self::PRIORITY_NORMAL;
+    }
+
+    public static function normalize_response_status(string $status): string {
+        return in_array($status, self::response_statuses(), true) ? $status : self::RESPONSE_NONE;
     }
 
     public static function can_transition(string $from, string $to): bool {

@@ -38,6 +38,11 @@ final class Orion_AI_Assistant{
  priority VARCHAR(20) NOT NULL DEFAULT 'normal',
  assigned_user_id BIGINT UNSIGNED NULL,
  resolution_note TEXT NULL,
+ manager_response LONGTEXT NULL,
+ response_status VARCHAR(20) NOT NULL DEFAULT 'none',
+ response_approved_by BIGINT UNSIGNED NULL,
+ response_approved_at DATETIME NULL,
+ response_delivered_at DATETIME NULL,
  status VARCHAR(20) NOT NULL DEFAULT 'new',
  resolved_at DATETIME NULL,
  created_at DATETIME NOT NULL,
@@ -46,7 +51,21 @@ final class Orion_AI_Assistant{
  KEY status_priority (status,priority),
  KEY conversation_id (conversation_id),
  KEY trace_id (trace_id),
- KEY assigned_user_id (assigned_user_id)
+ KEY assigned_user_id (assigned_user_id),
+ KEY conversation_response (conversation_id,response_status)
+) $c;",
+ "CREATE TABLE {$wpdb->prefix}orion_ai_handoff_events (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+ handoff_id BIGINT UNSIGNED NOT NULL,
+ user_id BIGINT UNSIGNED NULL,
+ event_type VARCHAR(50) NOT NULL,
+ from_status VARCHAR(20) NOT NULL,
+ to_status VARCHAR(20) NOT NULL,
+ payload_json LONGTEXT NULL,
+ created_at DATETIME NOT NULL,
+ PRIMARY KEY  (id),
+ KEY handoff_id (handoff_id),
+ KEY created_at (created_at)
 ) $c;",
  "CREATE TABLE {$wpdb->prefix}orion_ai_traces (
  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

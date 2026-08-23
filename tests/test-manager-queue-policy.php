@@ -3,10 +3,7 @@ use PHPUnit\Framework\TestCase;
 
 final class OrionManagerQueuePolicyTest extends TestCase {
     public function test_exposes_expected_statuses(): void {
-        $this->assertSame(
-            array('new', 'in_progress', 'resolved', 'dismissed'),
-            Orion_Manager_Queue_Policy::statuses()
-        );
+        $this->assertSame(array('new', 'in_progress', 'resolved', 'dismissed'), Orion_Manager_Queue_Policy::statuses());
     }
 
     public function test_allows_normal_workflow_transitions(): void {
@@ -29,6 +26,12 @@ final class OrionManagerQueuePolicyTest extends TestCase {
     public function test_priority_is_conservative(): void {
         $this->assertSame('urgent', Orion_Manager_Queue_Policy::normalize_priority('urgent'));
         $this->assertSame('normal', Orion_Manager_Queue_Policy::normalize_priority('unexpected'));
+    }
+
+    public function test_response_status_is_closed_and_conservative(): void {
+        $this->assertSame(array('none', 'draft', 'approved', 'delivered'), Orion_Manager_Queue_Policy::response_statuses());
+        $this->assertSame('approved', Orion_Manager_Queue_Policy::normalize_response_status('approved'));
+        $this->assertSame('none', Orion_Manager_Queue_Policy::normalize_response_status('unexpected'));
     }
 
     public function test_only_resolved_and_dismissed_are_terminal(): void {
