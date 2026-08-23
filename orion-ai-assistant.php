@@ -26,7 +26,7 @@ $orion_ai_files = array(
     'class-orion-product-facts.php','class-orion-selection-evidence.php','class-orion-kit-validator.php','class-orion-intent-classifier.php','class-orion-context-manager.php',
     'class-orion-semantic-product-planner.php','class-orion-manager-queue-policy.php','class-orion-manager-handoff.php','class-orion-trace-service.php','class-orion-diagnostics-service.php',
     'class-orion-evaluation-service.php','class-orion-chat-orchestrator.php','class-orion-rest-controller.php','class-orion-manager-queue-admin.php','class-orion-admin-controller.php',
-    'class-orion-ai-assistant.php','class-orion-cli-command.php',
+    'class-orion-ai-assistant.php','class-orion-cli-command.php','class-orion-manager-queue-cli-command.php',
 );
 foreach ($orion_ai_files as $orion_ai_file) { require_once ORION_AI_DIR . 'includes/' . $orion_ai_file; }
 register_activation_hook(__FILE__, array('Orion_AI_Assistant', 'activate'));
