@@ -1,21 +1,24 @@
 # Changelog
 
-## 0.14.0 — Conversation Review and AI Knowledge Gaps (development)
+## 0.14.0 — Conversation Review and AI Knowledge Gaps (release candidate)
 
 - Added an admin Conversations screen for every retained customer question and AI answer.
 - Added message and gap counts plus direct full-dialogue review.
 - Reframed unanswered handoffs as AI knowledge gaps rather than manager replies.
 - Removed all runtime customer-response draft, approval and delivery behavior.
-- Added gap states displayed as New, Reviewing, Added to knowledge and Ignored.
+- Added New, Reviewing, Added to knowledge and Ignored states.
 - Added filters by state and deterministic failure reason.
 - Added separate knowledge title, verified guidance, optional source URL and linked document metadata.
-- Added explicit one-click publication and immediate indexing of reviewed guidance.
+- Added explicit publication and immediate indexing of reviewed guidance.
 - Prevented automatic publication of customer messages, traces, diagnostics or model output.
-- Stored customer questions before AI routing so provider failures remain visible for review.
+- Stored customer questions before routing so provider failures remain visible.
 - Added gap capture for classification and final-answer provider failures.
-- Added read-only `wp orion-ai gaps` diagnostics with private text hidden by default.
-- Added per-gap review history without copying guidance text into event payloads.
-- Bumped the development schema to `0.12.0`.
+- Added read-only `wp orion-ai gaps` diagnostics and schema health reporting.
+- Added explicit fallback migration checks for required AI-gap columns.
+- Bumped the schema to `0.12.1`.
+- Acceptance-frozen the code baseline at `b9e132e` on 2026-08-24.
+- Passed the live OpenRouter evaluation at `14/14`, average `4832 ms`, `12399` tokens.
+- Passed the browser round trip from gap `#28` to a reviewed Knowledge Base answer.
 
 ## 0.13.0 — Open Semantic Planning (release candidate)
 
@@ -36,4 +39,3 @@
 ## 0.11.0–0.11.6
 
 - Added semantic catalogue indexing, readiness audit, deterministic delivery routing and structured product selection.
-- Required explicit roller-system evidence and prioritized core kit roles.
