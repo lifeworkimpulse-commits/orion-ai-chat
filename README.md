@@ -2,36 +2,21 @@
 
 Private WooCommerce plugin that provides a grounded AI shopping assistant through OpenRouter or Google Gemini.
 
-## Current release candidate
+## Current development line
 
-`0.14.0` is the acceptance-frozen Conversation Review and AI Knowledge Gaps line. The accepted code baseline is `b9e132e`; it passed the frozen 14-case OpenRouter evaluation and the complete browser workflow from unsupported question to reviewed Knowledge Base answer.
+`0.15.0` develops AI Improvement Tickets on top of the acceptance-frozen `0.14.0` baseline.
 
-Managers can review every retained customer/AI dialogue. Requests Orion cannot answer are collected as gaps with their trace and failure reason. A manager can write separate verified guidance, attach an optional source URL and explicitly index only that reviewed guidance.
+Current functionality:
 
-Customers communicate only with AI. There is no manager-response delivery workflow, and customer messages are never published to the Knowledge Base automatically.
+- deterministic source-specific gap types;
+- complete store-policy evidence required for every requested fact;
+- server-side pagination for AI Gaps and Customer Conversations;
+- private repeated-gap groups with occurrence and open counts;
+- one manager-controlled internal improvement ticket per group;
+- priority, owner, fix plan, verification evidence and audited lifecycle;
+- direct links to every related conversation, gap and trace.
 
-The `0.12.0`, `0.13.0` and `0.14.0` pull requests remain Draft and unmerged. New feature work must use a new branch.
-
-## Requirements
-
-- WordPress 6.2+
-- WooCommerce 8.0+
-- PHP 8.0+
-- DOM and mbstring
-- HTTPS and outbound access to the configured AI provider
-
-## Local installation
-
-Clone into `wp-content/plugins/orion-ai-assistant`, activate, then open **WooCommerce → AI Assistant**.
-
-Keep production credentials in `wp-config.php`:
-
-```php
-define('ORION_AI_OPENROUTER_KEY','your-key');
-define('ORION_AI_GOOGLE_KEY','your-key');
-```
-
-Never commit API keys.
+`0.14.0` remains frozen at code baseline `b9e132e` and documentation head `0df42ed`. Pull requests remain Draft and unmerged.
 
 ## Development
 
@@ -47,26 +32,22 @@ composer lint
 ```bash
 wp orion-ai status
 wp orion-ai migrate --apply
-wp orion-ai catalogue-index --apply
-wp orion-ai catalogue-audit --details
-wp orion-ai evaluate --provider=openrouter --model=<model>
 wp orion-ai gaps schema
 wp orion-ai gaps stats
-wp orion-ai gaps list --status=new
+wp orion-ai gaps groups
+wp orion-ai gaps list --group=<id>
+wp orion-ai gaps ticket <group-id>
 wp orion-ai gaps show <id>
 ```
 
-Gap commands omit private text by default. Use `--details` only on a trusted console.
+Commands omit private text by default. Use `--details` only on a trusted console.
 
-## Architecture
+## Safety contract
 
-- AI creates open product needs from arbitrary customer language.
-- Every need receives its own live WooCommerce candidate set.
-- Accepted selections require explicit catalogue evidence.
-- Deterministic code validates IDs, stock, price, candidate membership and unsupported claims.
-- Every retained customer question and successful AI answer can be reviewed by authorized managers.
-- Unanswered requests and provider failures create AI gaps.
-- Knowledge publication requires separately written, verified guidance and explicit confirmation.
-- Customer dialogue, traces and diagnostics are never automatically used as knowledge.
+- Gap type, grouping and priority suggestions are internal signals, not automatic training.
+- A policy answer is shown only when every requested fact has document evidence.
+- No gap, group or ticket automatically changes Knowledge Base, products, routing or code.
+- Ticket resolution requires manager-written verification evidence.
+- Customer dialogue, traces and diagnostics remain private admin data.
 
-See `docs/open-semantic-planning-0.13.0.md`, `docs/manager-queue-0.14.0.md` and `docs/acceptance-0.14.0.md`.
+See `docs/ai-improvement-tickets-0.15.0.md`.

@@ -1,0 +1,9 @@
+<?php
+use PHPUnit\Framework\TestCase;
+final class OrionGapGroupingTest extends TestCase{
+ public function test_context_topic_groups_paraphrases():void{$a=Orion_Gap_Grouping::key('What does delivery cost to Belfast?','knowledge','knowledge_no_results',array('classification'=>array('intent'=>'store_policy','topic'=>'delivery')));$b=Orion_Gap_Grouping::key('Can you ship to BT7 and how long will it take?','knowledge','knowledge_no_results',array('classification'=>array('intent'=>'store_policy','topic'=>'delivery')));$this->assertSame($a,$b);}
+ public function test_different_topics_stay_separate():void{$delivery=Orion_Gap_Grouping::key('Question','knowledge','knowledge_no_results',array('classification'=>array('intent'=>'store_policy','topic'=>'delivery')));$returns=Orion_Gap_Grouping::key('Question','knowledge','knowledge_no_results',array('classification'=>array('intent'=>'store_policy','topic'=>'returns')));$this->assertNotSame($delivery,$returns);}
+ public function test_question_signature_ignores_order_and_polite_fillers():void{$a=Orion_Gap_Grouping::signature('Please, I need a white sanitary silicone for a bathroom sink.');$b=Orion_Gap_Grouping::signature('Bathroom sink: sanitary white silicone wanted.');$this->assertSame($a,$b);}
+ public function test_similarity_detects_near_duplicates():void{$score=Orion_Gap_Grouping::similarity('white sanitary silicone for bathroom sink','need sanitary white silicone around the bathroom sink');$this->assertGreaterThanOrEqual(0.6,$score);}
+ public function test_unknown_context_falls_back_to_question():void{$a=Orion_Gap_Grouping::key('delivery to Belfast','knowledge','knowledge_no_results',array('classification'=>array('intent'=>'unknown','topic'=>'general')));$b=Orion_Gap_Grouping::key('returns policy','knowledge','knowledge_no_results',array('classification'=>array('intent'=>'unknown','topic'=>'general')));$this->assertNotSame($a,$b);}
+}
