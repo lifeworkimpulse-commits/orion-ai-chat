@@ -4,6 +4,7 @@
 
 - Added deterministic gap types and source-specific recommended actions.
 - Restricted Knowledge Base publication to genuine knowledge gaps.
+- Added complete per-requirement policy evidence validation to prevent partial answers from hiding knowledge gaps.
 - Added server-side AI Gap pagination with 10, 20 or 50 rows.
 - Added server-side Customer Conversation pagination with 20, 50 or 100 rows.
 - Added private repeated-gap groups based on existing intent/topic signals and conservative token similarity.

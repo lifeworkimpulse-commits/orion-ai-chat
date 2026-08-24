@@ -10,6 +10,7 @@ Current functionality:
 
 - deterministic resolution targets: Knowledge Base, WooCommerce catalogue, product-data quality, AI routing, AI provider or technical;
 - Knowledge Base publication restricted to genuine knowledge gaps;
+- complete store-policy evidence required for every requested fact;
 - server-side pagination for AI Gaps and Customer Conversations;
 - private repeated-gap groups with occurrence and open counts;
 - direct access from a repeated group to all linked conversations, gaps and traces.
@@ -49,6 +50,7 @@ Gap commands omit private text by default. Use `--details` only on a trusted con
 
 - Customers communicate only with AI.
 - Gap type and grouping are internal prioritisation signals, not automatic training.
+- A policy answer is shown only when every requested fact has document evidence.
 - No gap or group automatically changes Knowledge Base, WooCommerce products, routing or code.
 - Only separately written and explicitly confirmed guidance can enter the Knowledge Base.
 - Customer dialogue, traces and diagnostics remain private admin data.

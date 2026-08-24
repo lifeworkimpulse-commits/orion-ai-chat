@@ -19,19 +19,19 @@ The gap workspace uses server-side pagination with 10, 20 or 50 rows. Customer C
 
 ## Stage 2 — Repeated gap groups
 
-Each gap is linked to a stable private group. Grouping prefers the classifier's existing intent and topic combined with the deterministic failure type and reason. When those signals are unavailable, conservative normalized-token similarity is used.
+Each gap is linked to a stable private group. Grouping prefers the classifier's existing intent and topic combined with deterministic failure type and reason. When those signals are unavailable, conservative normalized-token similarity is used.
 
-The admin workspace shows repeated groups with:
-
-- representative request;
-- improvement type and reason;
-- total occurrences;
-- open occurrence count;
-- direct filtered access to all linked gaps.
+The admin workspace shows representative request, improvement type, total occurrences, open count and direct filtered access to linked gaps.
 
 Existing gaps are grouped during schema migration. New gaps join a group when they are created. Counts are recomputed from linked rows rather than trusted from customer input.
 
-Grouping is prioritisation only. It does not publish knowledge, modify products, change routing, close gaps or execute any instruction in customer text.
+Grouping is prioritisation only. It does not publish knowledge, modify products, change routing, close gaps or execute instructions in customer text.
+
+## Complete policy evidence
+
+A store-policy answer must cover every independently requested factual requirement. The policy provider returns each requirement with a short verbatim evidence quote. Runtime validation confirms that every quote exists in retrieved store documents.
+
+If any requested value, condition, date, duration, price, area or guarantee is unsupported, the complete request becomes a knowledge gap instead of receiving a misleading partial answer. For example, documentation saying that a weekend charge exists does not answer a request for its exact amount.
 
 ## Planned stages
 
@@ -43,6 +43,7 @@ Grouping is prioritisation only. It does not publish knowledge, modify products,
 ## Safety
 
 - Customer text is normalized only for a non-executable private grouping fingerprint.
+- Policy evidence is checked against retrieved approved documents.
 - No model output or customer claim becomes knowledge automatically.
-- Knowledge publication remains capability/nonce protected and requires separately written verified guidance.
+- Knowledge publication requires separately written verified guidance and explicit confirmation.
 - Conversations, representative requests and diagnostics remain admin-only.
