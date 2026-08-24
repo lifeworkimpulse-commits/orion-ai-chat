@@ -7,6 +7,8 @@
 - Added recommended source-specific actions for every gap type.
 - Restricted Knowledge Base publication to genuine knowledge gaps.
 - Added type filters and recommendations to the admin gap workspace.
+- Added server-side gap pagination with 10, 20 or 50 rows per page.
+- Preserved filters and the current page after review actions.
 - Added direct WooCommerce Products navigation for catalogue and product-data gaps.
 - Added gap-type counts and filtering to read-only WP-CLI diagnostics.
 - Backfilled existing gaps from deterministic reason codes.

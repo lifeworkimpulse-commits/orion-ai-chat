@@ -26,9 +26,17 @@ The type controls the recommended action. Only `knowledge` gaps may publish revi
 
 Existing `0.14.0` rows are backfilled from `reason_code` during migration. No customer text or model output is used to determine the resolution target.
 
+### Admin pagination
+
+- Gap queries use SQL `LIMIT` and `OFFSET`; the full filtered result set is not loaded into PHP.
+- The default is 10 gaps per page, with 20 and 50 as explicit alternatives.
+- Status, type and reason filters are preserved between pages.
+- Review actions return the manager to the same filtered page.
+- The current visible range and total filtered result count are displayed above and below the list.
+
 ## Planned stages
 
-1. Admin type filters, recommendations and publication boundary.
+1. Admin type filters, recommendations and publication boundary. Complete.
 2. Similar-gap grouping and occurrence counts.
 3. Internal improvement-ticket lifecycle and linked evidence.
 4. Regression-case creation and acceptance.
