@@ -1,47 +1,21 @@
 <?php
 if(!defined('ABSPATH')){exit;}
-
 final class Orion_Improvement_Ticket_Policy{
- public const TYPE_KNOWLEDGE='knowledge';
- public const TYPE_CATALOGUE='catalogue';
- public const TYPE_PRODUCT_DATA='product_data';
- public const TYPE_ROUTING='routing';
- public const TYPE_PROVIDER='provider';
- public const TYPE_TECHNICAL='technical';
-
+ public const TYPE_KNOWLEDGE='knowledge';public const TYPE_CATALOGUE='catalogue';public const TYPE_PRODUCT_DATA='product_data';public const TYPE_ROUTING='routing';public const TYPE_PROVIDER='provider';public const TYPE_TECHNICAL='technical';
+ public const TICKET_BACKLOG='backlog';public const TICKET_PLANNED='planned';public const TICKET_IN_PROGRESS='in_progress';public const TICKET_VALIDATING='validating';public const TICKET_RESOLVED='resolved';public const TICKET_DISMISSED='dismissed';
+ public const PRIORITY_LOW='low';public const PRIORITY_NORMAL='normal';public const PRIORITY_HIGH='high';public const PRIORITY_CRITICAL='critical';
  public static function types():array{return array(self::TYPE_KNOWLEDGE,self::TYPE_CATALOGUE,self::TYPE_PRODUCT_DATA,self::TYPE_ROUTING,self::TYPE_PROVIDER,self::TYPE_TECHNICAL);}
  public static function normalize(string $type):string{return in_array($type,self::types(),true)?$type:self::TYPE_TECHNICAL;}
- public static function classify_reason(string $reason):string{
-  $reason=strtolower(trim($reason));
-  $reason=(string)preg_replace('/[^a-z0-9_\-]+/','_',$reason);
-  $exact=array(
-   'knowledge_no_results'=>self::TYPE_KNOWLEDGE,
-   'knowledge_not_supported'=>self::TYPE_KNOWLEDGE,
-   'catalogue_no_candidates'=>self::TYPE_CATALOGUE,
-   'required_product_missing'=>self::TYPE_PRODUCT_DATA,
-   'classification_provider_error'=>self::TYPE_PROVIDER,
-   'answer_provider_error'=>self::TYPE_PROVIDER,
-   'classification_invalid_output'=>self::TYPE_ROUTING,
-   'classifier_requested_handoff'=>self::TYPE_ROUTING,
-   'classifier_requested_review'=>self::TYPE_ROUTING,
-   'manager_follow_up'=>self::TYPE_ROUTING,
-  );
-  if(isset($exact[$reason]))return$exact[$reason];
-  if(str_contains($reason,'provider')||str_contains($reason,'timeout')||str_contains($reason,'rate_limit'))return self::TYPE_PROVIDER;
-  if(str_contains($reason,'knowledge')||str_contains($reason,'policy'))return self::TYPE_KNOWLEDGE;
-  if(str_contains($reason,'catalogue')||str_contains($reason,'no_candidates')||str_contains($reason,'stock'))return self::TYPE_CATALOGUE;
-  if(str_contains($reason,'product')||str_contains($reason,'selection')||str_contains($reason,'compatibility')||str_contains($reason,'evidence'))return self::TYPE_PRODUCT_DATA;
-  if(str_contains($reason,'classifier')||str_contains($reason,'routing')||str_contains($reason,'intent'))return self::TYPE_ROUTING;
-  return self::TYPE_TECHNICAL;
- }
- public static function label(string $type):string{return array(self::TYPE_KNOWLEDGE=>'Knowledge Base',self::TYPE_CATALOGUE=>'WooCommerce catalogue',self::TYPE_PRODUCT_DATA=>'Product data quality',self::TYPE_ROUTING=>'AI routing',self::TYPE_PROVIDER=>'AI provider',self::TYPE_TECHNICAL=>'Technical') [self::normalize($type)];}
- public static function recommended_action(string $type):string{return array(
-  self::TYPE_KNOWLEDGE=>'Write verified guidance, attach an approved source when available, and explicitly publish it to the Knowledge Base.',
-  self::TYPE_CATALOGUE=>'Confirm whether the store sells the requested item. Add or publish the correct WooCommerce product, then rebuild the catalogue index.',
-  self::TYPE_PRODUCT_DATA=>'Improve the relevant WooCommerce title, descriptions, categories, attributes or compatibility evidence, then rebuild the catalogue index.',
-  self::TYPE_ROUTING=>'Review the trace, correct routing or prompts if needed, and add a regression evaluation case before closing the issue.',
-  self::TYPE_PROVIDER=>'Inspect provider attempts, model output, timeout and fallback behavior. Do not publish the failure itself as store knowledge.',
-  self::TYPE_TECHNICAL=>'Inspect the trace and logs, create an engineering ticket, and verify the fix with a regression test.',
- )[self::normalize($type)];}
+ public static function classify_reason(string $reason):string{$reason=strtolower(trim($reason));$reason=(string)preg_replace('/[^a-z0-9_\-]+/','_',$reason);$exact=array('knowledge_no_results'=>self::TYPE_KNOWLEDGE,'knowledge_not_supported'=>self::TYPE_KNOWLEDGE,'catalogue_no_candidates'=>self::TYPE_CATALOGUE,'required_product_missing'=>self::TYPE_PRODUCT_DATA,'classification_provider_error'=>self::TYPE_PROVIDER,'answer_provider_error'=>self::TYPE_PROVIDER,'classification_invalid_output'=>self::TYPE_ROUTING,'classifier_requested_handoff'=>self::TYPE_ROUTING,'classifier_requested_review'=>self::TYPE_ROUTING,'manager_follow_up'=>self::TYPE_ROUTING);if(isset($exact[$reason]))return$exact[$reason];if(str_contains($reason,'provider')||str_contains($reason,'timeout')||str_contains($reason,'rate_limit'))return self::TYPE_PROVIDER;if(str_contains($reason,'knowledge')||str_contains($reason,'policy'))return self::TYPE_KNOWLEDGE;if(str_contains($reason,'catalogue')||str_contains($reason,'no_candidates')||str_contains($reason,'stock'))return self::TYPE_CATALOGUE;if(str_contains($reason,'product')||str_contains($reason,'selection')||str_contains($reason,'compatibility')||str_contains($reason,'evidence'))return self::TYPE_PRODUCT_DATA;if(str_contains($reason,'classifier')||str_contains($reason,'routing')||str_contains($reason,'intent'))return self::TYPE_ROUTING;return self::TYPE_TECHNICAL;}
+ public static function label(string $type):string{return array(self::TYPE_KNOWLEDGE=>'Knowledge Base',self::TYPE_CATALOGUE=>'WooCommerce catalogue',self::TYPE_PRODUCT_DATA=>'Product data quality',self::TYPE_ROUTING=>'AI routing',self::TYPE_PROVIDER=>'AI provider',self::TYPE_TECHNICAL=>'Technical')[self::normalize($type)];}
+ public static function recommended_action(string $type):string{return array(self::TYPE_KNOWLEDGE=>'Write verified guidance, attach an approved source when available, and explicitly publish it to the Knowledge Base.',self::TYPE_CATALOGUE=>'Confirm whether the store sells the requested item. Add or publish the correct WooCommerce product, then rebuild the catalogue index.',self::TYPE_PRODUCT_DATA=>'Improve the relevant WooCommerce title, descriptions, categories, attributes or compatibility evidence, then rebuild the catalogue index.',self::TYPE_ROUTING=>'Review the trace, correct routing or prompts if needed, and add a regression evaluation case before closing the issue.',self::TYPE_PROVIDER=>'Inspect provider attempts, model output, timeout and fallback behavior. Do not publish the failure itself as store knowledge.',self::TYPE_TECHNICAL=>'Inspect the trace and logs, create an engineering ticket, and verify the fix with a regression test.')[self::normalize($type)];}
  public static function can_publish_to_knowledge(string $type):bool{return self::normalize($type)===self::TYPE_KNOWLEDGE;}
+ public static function ticket_statuses():array{return array(self::TICKET_BACKLOG,self::TICKET_PLANNED,self::TICKET_IN_PROGRESS,self::TICKET_VALIDATING,self::TICKET_RESOLVED,self::TICKET_DISMISSED);}
+ public static function ticket_priorities():array{return array(self::PRIORITY_LOW,self::PRIORITY_NORMAL,self::PRIORITY_HIGH,self::PRIORITY_CRITICAL);}
+ public static function normalize_ticket_status(string $status):string{return in_array($status,self::ticket_statuses(),true)?$status:self::TICKET_BACKLOG;}
+ public static function normalize_priority(string $priority):string{return in_array($priority,self::ticket_priorities(),true)?$priority:self::PRIORITY_NORMAL;}
+ public static function can_ticket_transition(string $from,string $to):bool{if(!in_array($from,self::ticket_statuses(),true)||!in_array($to,self::ticket_statuses(),true))return false;if($from===$to)return true;$allowed=array(self::TICKET_BACKLOG=>array(self::TICKET_PLANNED,self::TICKET_IN_PROGRESS,self::TICKET_DISMISSED),self::TICKET_PLANNED=>array(self::TICKET_BACKLOG,self::TICKET_IN_PROGRESS,self::TICKET_DISMISSED),self::TICKET_IN_PROGRESS=>array(self::TICKET_PLANNED,self::TICKET_VALIDATING,self::TICKET_DISMISSED),self::TICKET_VALIDATING=>array(self::TICKET_IN_PROGRESS,self::TICKET_RESOLVED),self::TICKET_RESOLVED=>array(self::TICKET_VALIDATING),self::TICKET_DISMISSED=>array(self::TICKET_BACKLOG));return in_array($to,$allowed[$from]??array(),true);}
+ public static function suggested_priority(int $occurrences,int $open):string{$weight=max($occurrences,$open);if($weight>=10)return self::PRIORITY_CRITICAL;if($weight>=5)return self::PRIORITY_HIGH;if($weight>=2)return self::PRIORITY_NORMAL;return self::PRIORITY_LOW;}
+ public static function ticket_status_label(string $status):string{return array(self::TICKET_BACKLOG=>'Backlog',self::TICKET_PLANNED=>'Planned',self::TICKET_IN_PROGRESS=>'In progress',self::TICKET_VALIDATING=>'Validating',self::TICKET_RESOLVED=>'Resolved',self::TICKET_DISMISSED=>'Dismissed')[self::normalize_ticket_status($status)];}
+ public static function priority_label(string $priority):string{return ucfirst(self::normalize_priority($priority));}
 }
