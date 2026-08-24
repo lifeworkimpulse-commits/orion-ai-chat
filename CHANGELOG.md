@@ -2,16 +2,16 @@
 
 ## 0.15.0 — AI Improvement Tickets (development)
 
-- Added deterministic gap types and source-specific recommended actions.
-- Restricted Knowledge Base publication to genuine knowledge gaps.
-- Added complete per-requirement policy evidence validation to prevent partial answers from hiding knowledge gaps.
-- Added server-side AI Gap pagination with 10, 20 or 50 rows.
-- Added server-side Customer Conversation pagination with 20, 50 or 100 rows.
-- Added private repeated-gap groups based on existing intent/topic signals and conservative token similarity.
-- Added occurrence counts, open counts and direct group filtering in admin.
-- Added grouped read-only WP-CLI diagnostics.
-- Backfilled existing gaps into groups during schema migration.
-- Bumped the plugin version to `0.15.0` and schema to `0.13.1`.
+- Added deterministic gap types and source-specific actions.
+- Added complete per-requirement policy evidence validation.
+- Added server-side pagination for AI Gaps and Customer Conversations.
+- Added private repeated-gap groups with occurrence and open counts.
+- Added one manager-created internal improvement ticket per group.
+- Added priority suggestions, manager ownership, fix plans, reference links and verification evidence.
+- Added controlled Backlog, Planned, In progress, Validating, Resolved and Dismissed transitions.
+- Added ticket audit history and read-only WP-CLI diagnostics.
+- Preserved active-ticket evidence from normal terminal-gap cleanup.
+- Bumped schema to `0.13.2`.
 
 ## 0.14.0 — Conversation Review and AI Knowledge Gaps (release candidate)
 
