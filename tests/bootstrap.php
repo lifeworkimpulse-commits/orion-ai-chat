@@ -9,3 +9,4 @@ require_once dirname(__DIR__).'/includes/class-orion-vision-review.php';
 require_once dirname(__DIR__).'/includes/class-orion-kit-validator.php';
 require_once dirname(__DIR__).'/includes/class-orion-manager-queue-policy.php';
 require_once dirname(__DIR__).'/includes/class-orion-improvement-ticket-policy.php';
+require_once dirname(__DIR__).'/includes/class-orion-gap-grouping.php';
