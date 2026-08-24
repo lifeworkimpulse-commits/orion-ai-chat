@@ -1,47 +1,41 @@
 # Changelog
 
+## 0.14.0 — Conversation Review and AI Knowledge Gaps (release candidate)
+
+- Added an admin Conversations screen for every retained customer question and AI answer.
+- Added message and gap counts plus direct full-dialogue review.
+- Reframed unanswered handoffs as AI knowledge gaps rather than manager replies.
+- Removed all runtime customer-response draft, approval and delivery behavior.
+- Added New, Reviewing, Added to knowledge and Ignored states.
+- Added filters by state and deterministic failure reason.
+- Added separate knowledge title, verified guidance, optional source URL and linked document metadata.
+- Added explicit publication and immediate indexing of reviewed guidance.
+- Prevented automatic publication of customer messages, traces, diagnostics or model output.
+- Stored customer questions before routing so provider failures remain visible.
+- Added gap capture for classification and final-answer provider failures.
+- Added read-only `wp orion-ai gaps` diagnostics and schema health reporting.
+- Added explicit fallback migration checks for required AI-gap columns.
+- Bumped the schema to `0.12.1`.
+- Acceptance-frozen the code baseline at `b9e132e` on 2026-08-24.
+- Passed the live OpenRouter evaluation at `14/14`, average `4832 ms`, `12399` tokens.
+- Passed the browser round trip from gap `#28` to a reviewed Knowledge Base answer.
+
 ## 0.13.0 — Open Semantic Planning (release candidate)
 
-- Started a separate development branch without merging the `0.12.0` draft pull request.
-- Bumped the plugin version to `0.13.0`; the database schema remains `0.9.0`.
-- Opened the semantic need contract so the AI can create safe free-form product need keys instead of choosing from a closed canonical-role enum.
-- Preserved known roles as optional hints for specialist validators, ordering and the existing `0.12.0` compatibility layer.
-- Added per-need live catalogue candidate groups for known and previously unseen product types.
-- Required every accepted AI selection to identify explicit catalogue evidence and use high or medium confidence.
-- Separated direct product-function evidence from unresolved size, fit, capacity and cross-product compatibility claims.
-- Added one bounded text compliance review for unresolved required or core function matches.
-- Added trace-level selection evidence, confidence, uncertainty and safe usage metrics.
-- Added bounded optional OpenRouter vision review for at most three unresolved live product candidates; unsupported or failed vision safely retains the text result.
-- Restricted image evidence to visible product type and visible components, never hidden contents, dimensions, capacity, coverage, technical suitability or compatibility.
-- Added conservative multimodal capability detection; unverified models remain text-only unless explicitly enabled.
-- Added safe recovery from malformed or truncated tool-call JSON and stage-specific output budgets for routing, selection and final answers.
-- Added semantic canonical hints for known painting functions while preserving previously unseen product needs as open keys.
-- Preserved new-plaster preparation evidence, negated surface conditions and quantity uncertainty across routing and product selection.
-- Expanded the live routing evaluation from 9 to 14 scenarios, including five previously unseen open product needs.
-- Added a documented `0.13.0` acceptance workflow and richer read-only diagnostics.
-- Kept deterministic validation as a safety and evidence layer rather than a catalogue-domain decision engine.
-- Acceptance-frozen the code baseline at `85b0fe9` after the final OpenRouter evaluation passed 14/14 on 2026-08-22.
+- Added open AI-generated product needs and per-need live catalogue retrieval.
+- Preserved known roles as optional specialist-validation hints rather than a closed allowlist.
+- Required explicit catalogue evidence and high or medium confidence for selections.
+- Added generic uncertainty handling and bounded optional vision review.
+- Added safe recovery from malformed tool output and stage-specific output budgets.
+- Expanded the live routing evaluation to 14 scenarios.
+- Acceptance-frozen the code baseline at `85b0fe9` after the final evaluation passed 14/14.
 
 ## 0.12.0 — Stabilization
 
-- Added a central canonical role registry shared by routing and product planning.
-- Extracted deterministic routing rules for delivery, dimensions and floor-project handling.
-- Added role-specific preparation routing that respects negated conditions such as no cracks, no oil and no previous coating.
-- Added structured product-fact extraction for functions, surfaces, included components, roller/tray widths, pack volume and explicit coverage evidence.
-- Extracted complete-kit validation from the semantic planner.
-- Added deterministic recovery for complete roller systems and verified optional core-kit roles when card capacity remains.
-- Added explicit quantity guidance so pack volume alone is never treated as proof of project coverage.
-- Preserved structured `select_products` output and live WooCommerce ID revalidation.
-- Added unit tests for role aliases, delivery routing, dimensions, surface-condition negation, roller evidence, compatible systems, tray width and pack-volume evidence.
-- Expanded permanent CI across PHP 8.0–8.3 with unit tests, static analysis and evaluation-suite validation.
-- Replaced one-line bootstrap and core routing/planning implementations with maintainable formatted code.
-- Documented production-catalogue benchmarks and release gates.
+- Added shared canonical roles, deterministic routing rules and specialist kit validation.
+- Added structured product facts and quantity uncertainty rules.
+- Added unit tests and permanent CI across PHP 8.0–8.3.
 
-## 0.11.6
+## 0.11.0–0.11.6
 
-- Required explicit evidence that a roller set contains both frame and sleeve.
-- Prioritized core painting-kit roles before conditional preparation roles.
-
-## 0.11.0–0.11.5
-
-- Added the semantic catalogue index, optimized retrieval, severity-aware catalogue audit, deterministic delivery routing and structured product selection.
+- Added semantic catalogue indexing, readiness audit, deterministic delivery routing and structured product selection.

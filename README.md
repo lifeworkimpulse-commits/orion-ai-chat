@@ -4,11 +4,13 @@ Private WooCommerce plugin that provides a grounded AI shopping assistant throug
 
 ## Current release candidate
 
-`0.13.0` is the acceptance-frozen open semantic planning line. The accepted code baseline is commit `85b0fe9`; it passed the 14-case live routing evaluation plus representative browser, trace and provider-fallback checks.
+`0.14.0` is the acceptance-frozen Conversation Review and AI Knowledge Gaps line. The accepted code baseline is `b9e132e`; it passed the frozen 14-case OpenRouter evaluation and the complete browser workflow from unsupported question to reviewed Knowledge Base answer.
 
-It starts from the unmerged `0.12.0` stabilization baseline and adds open AI-generated product needs, per-need live catalogue retrieval, evidence-based selection, generic uncertainty handling and bounded optional vision review.
+Managers can review every retained customer/AI dialogue. Requests Orion cannot answer are collected as gaps with their trace and failure reason. A manager can write separate verified guidance, attach an optional source URL and explicitly index only that reviewed guidance.
 
-The `0.12.0` and `0.13.0` pull requests remain draft and are not merged. New feature work should not be added to the frozen `0.13.0` code baseline.
+Customers communicate only with AI. There is no manager-response delivery workflow, and customer messages are never published to the Knowledge Base automatically.
+
+The `0.12.0`, `0.13.0` and `0.14.0` pull requests remain Draft and unmerged. New feature work must use a new branch.
 
 ## Requirements
 
@@ -20,9 +22,9 @@ The `0.12.0` and `0.13.0` pull requests remain draft and are not merged. New fea
 
 ## Local installation
 
-Clone the repository into `wp-content/plugins/orion-ai-assistant`, activate it, then open **WooCommerce → AI Assistant**.
+Clone into `wp-content/plugins/orion-ai-assistant`, activate, then open **WooCommerce → AI Assistant**.
 
-For production, keep credentials in `wp-config.php`:
+Keep production credentials in `wp-config.php`:
 
 ```php
 define('ORION_AI_OPENROUTER_KEY','your-key');
@@ -40,8 +42,6 @@ composer analyse
 composer lint
 ```
 
-CI validates PHP 8.0–8.3, PHP syntax, unit tests, static analysis, JavaScript syntax and evaluation JSON.
-
 ## Operations
 
 ```bash
@@ -50,23 +50,23 @@ wp orion-ai migrate --apply
 wp orion-ai catalogue-index --apply
 wp orion-ai catalogue-audit --details
 wp orion-ai evaluate --provider=openrouter --model=<model>
-wp orion-ai diagnose --message="<prompt>"
+wp orion-ai gaps schema
+wp orion-ai gaps stats
+wp orion-ai gaps list --status=new
+wp orion-ai gaps show <id>
 ```
+
+Gap commands omit private text by default. Use `--details` only on a trusted console.
 
 ## Architecture
 
-- AI produces an open list of project needs from arbitrary customer language.
-- Known roles remain optional hints and validator hooks, not a closed allowlist.
+- AI creates open product needs from arbitrary customer language.
 - Every need receives its own live WooCommerce candidate set.
-- AI selections require explicit catalogue evidence and high or medium confidence.
-- Function evidence is separated from unresolved size, fit, capacity and compatibility details.
-- Verified multimodal models may review images only after text processing leaves an unresolved required or core need, using at most three relevant live product images.
-- Unverified or text-only models skip image review without breaking selection.
-- Deterministic code remains responsible for live IDs, stock, price, candidate membership, specialist compatibility checks and unsupported-claim prevention.
-- Text-only operation remains complete when vision is unavailable.
+- Accepted selections require explicit catalogue evidence.
+- Deterministic code validates IDs, stock, price, candidate membership and unsupported claims.
+- Every retained customer question and successful AI answer can be reviewed by authorized managers.
+- Unanswered requests and provider failures create AI gaps.
+- Knowledge publication requires separately written, verified guidance and explicit confirmation.
+- Customer dialogue, traces and diagnostics are never automatically used as knowledge.
 
-See `docs/open-semantic-planning-0.13.0.md` for the architecture and `docs/acceptance-0.13.0.md` for the accepted release-candidate baseline.
-
-## Privacy
-
-The plugin stores conversations, usage metadata and operational events in custom tables. Configure finite retention and disclose AI processing in the store privacy policy. Conditional vision review sends only public WooCommerce product image URLs for unresolved catalogue candidates; it does not send customer-uploaded images.
+See `docs/open-semantic-planning-0.13.0.md`, `docs/manager-queue-0.14.0.md` and `docs/acceptance-0.14.0.md`.
